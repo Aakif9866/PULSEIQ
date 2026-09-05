@@ -3,18 +3,21 @@
 What's needed to deploy PulseIQ, and — importantly — what's actually been
 verified versus what's still a documented plan.
 
-**Honesty check first:** the backend is now genuinely deployed and live on
-Railway — verified with a real HTTP request against the deployed URL, not
-assumed (see "Backend on Railway" below). The frontend has **not** been
-deployed yet; its setup steps below remain a documented plan until that
-service actually exists and has been verified the same way.
+**Honesty check first:** both services are now genuinely deployed and
+live on Railway, in the same project — verified with real HTTP requests
+against the deployed URLs, including a real signup round-tripped through
+the deployed frontend's origin against the deployed backend (see
+"Backend on Railway" and "Frontend on Railway" below).
 
 ## Current deployment mode
 
-**Backend: live on Railway** (`https://pulseiq-production-0585.up.railway.app`,
-verified via `GET /api/v1/health` → `200`). **Frontend: not yet deployed**
-— still run via Docker Compose or natively for now. **Database:** Neon,
-unchanged. **Storage:** local disk (see limitation below).
+**Backend: live on Railway**
+(`https://pulseiq-production-0585.up.railway.app`, verified via `GET
+/api/v1/health` → `200`). **Frontend: live on Railway**
+(`https://pulseiq-frontend-production.up.railway.app`, verified serving
+the built SPA and calling the real backend URL — grepped in the built
+JS, not assumed). **Database:** Neon, unchanged. **Storage:** local disk
+(see limitation below).
 
 ## Chosen deployment target
 
@@ -150,31 +153,42 @@ proxy; `docker build --build-arg VITE_API_URL=...` produces a bundle that
 actually contains the given URL (grepped for it in the built JS, not
 assumed).
 
-### Setup steps (dashboard/CLI — do this part yourself)
+### Setup steps (as actually done)
 
-1. In the same Railway project: **New Service** → **GitHub Repo** →
-   `Aakif9866/PULSEIQ` again (a second service, separate from the
-   backend one).
-2. Settings → **Root Directory**: `frontend`. Railway should find
-   `frontend/Dockerfile`.
-3. Add a **build-time** variable: `VITE_API_URL` =
-   `https://<your-railway-backend-url>/api/v1` (from the backend step,
-   with `/api/v1` appended — the same path prefix `API_V1_PREFIX` uses
+1. Created via `railway add --repo Aakif9866/PULSEIQ --branch main
+   --service pulseiq-frontend` — a second service in the same `PulseIQ`
+   project, separate from the backend one.
+2. Configured via `railway environment edit --json`: `source.rootDirectory
+   = "frontend"`, `build.builder = "DOCKERFILE"`, `build.dockerfilePath =
+   "Dockerfile"` (relative to `rootDirectory`, same gotcha as BUG-012 —
+   correct here from the start since it was applied deliberately).
+3. Set the build-time variable `VITE_API_URL =
+   https://pulseiq-production-0585.up.railway.app/api/v1` (the real
+   backend URL + `/api/v1`, the same path prefix `API_V1_PREFIX` uses
    everywhere else).
-   **Verify Railway actually passes this as a Docker build `ARG`**, not
-   only a runtime env var — Dockerfile-based builds don't automatically
-   get dashboard variables at build time on every platform. Check
-   Railway's own docs for "build arguments" / `ARG` referencing if unsure,
-   and confirm after deploying by viewing the site's network requests (or
-   its built JS under `/assets/*.js`) and checking API calls go to the
-   real backend URL, not a relative `/api/v1` path.
-4. Deploy. Railway gives you a URL like
-   `https://pulseiq-frontend-production.up.railway.app`.
-5. **Go back to the backend service** and set `CORS_ORIGINS` to include
-   this real URL, e.g. `["https://pulseiq-frontend-production.up.railway.app"]`
-   — the backend's default (`localhost` only) will otherwise block every
-   request from the deployed frontend with a CORS error, not a helpful
-   one.
+   **Confirmed Railway does pass this through as a Docker build `ARG`**
+   for a Dockerfile-based service — not assumed: fetched the deployed
+   site's actual JS bundle
+   (`/assets/index-BC1bhf8-.js`) and grepped it for the backend hostname,
+   found it baked in literally (`pulseiq-production-0585.up.railway.app/api/v1`).
+4. Deployed. Public domain generated: `https://pulseiq-frontend-production.up.railway.app`.
+   Verified: `curl` to `/` returns `200` and the real `index.html` shell.
+5. Set the backend's `CORS_ORIGINS` to
+   `["https://pulseiq-frontend-production.up.railway.app"]` via `railway
+   variable set` (triggered an automatic backend redeploy to pick it up).
+   Verified with a real `OPTIONS` preflight from that exact origin against
+   `/api/v1/auth/login` — response carried
+   `access-control-allow-origin: https://pulseiq-frontend-production.up.railway.app`.
+6. **Full end-to-end verification**: a real `POST
+   /api/v1/auth/signup` with `Origin:
+   https://pulseiq-frontend-production.up.railway.app` against the live
+   backend returned `201` with real JWTs and a real user row created in
+   the live Neon database — the complete deployed stack (frontend origin
+   → backend → database) confirmed working together, not just each piece
+   in isolation. (This created one real test account,
+   `railway-e2e-check@example.com`, in the production database — left in
+   place rather than adding an undocumented delete path; harmless, but
+   worth knowing it's there.)
 
 ## Local storage limitation
 
@@ -209,13 +223,29 @@ the only schema-management mechanism.
   a real HTTP request against Railway's actual infrastructure.
 - All environment variables (`DATABASE_URL` pointing at the real Neon
   instance, `SECRET_KEY`, `GROQ_API_KEY`, etc.) are live on that service.
+- The frontend service (`pulseiq-frontend`, same project) actually builds
+  from `frontend/Dockerfile` on Railway and reached a terminal `SUCCESS`
+  status the same way.
+- `curl https://pulseiq-frontend-production.up.railway.app/` returned
+  `200` with the real built `index.html`.
+- Railway **does** pass a declared variable through as a Docker build
+  `ARG` for a Dockerfile-based service — confirmed, not assumed: fetched
+  the deployed bundle's actual JS
+  (`/assets/index-BC1bhf8-.js`) and grepped it for the backend's
+  hostname, found it baked in literally.
+- A real cross-origin `OPTIONS` preflight from
+  `https://pulseiq-frontend-production.up.railway.app` against
+  `https://pulseiq-production-0585.up.railway.app/api/v1/auth/login`
+  returned the expected `access-control-allow-origin` header — the real
+  CORS wiring working on Railway's actual network, not just verified by
+  code inspection.
+- **Full end-to-end**: a real `POST /api/v1/auth/signup` with that exact
+  `Origin` header against the live backend returned `201` with real JWTs
+  and created a real row in the live Neon database — frontend origin →
+  backend → database, the complete deployed stack, confirmed together.
 
 **Verified locally**, standing in for the real platform as closely as
 possible:
-- The exact Railway frontend runtime contract — standalone `docker run`
-  with a dynamic `$PORT` and a `--build-arg VITE_API_URL`, matching what
-  a Railway service actually does (mechanism, not the platform itself —
-  no frontend Railway service exists yet).
 - `docker-compose.yml` still works identically after every fix above
   (regression-checked repeatedly: both containers build and report
   `healthy`, a real signup+login round-tripped through the containerized
@@ -223,25 +253,19 @@ possible:
 - Backend lint (`ruff`), typecheck (`mypy`), and the full test suite
   (48/48 passing) all re-run clean locally after this deployment fix;
   frontend lint (`oxlint`), typecheck (`tsc`), and production build all
-  clean too. No application code changed — this was a Railway service
-  configuration fix only.
+  clean too. No application code changed for the backend fix — that was
+  a Railway service configuration fix only; the frontend deploy needed no
+  code changes either, only its own service configuration.
 
 **Not yet verified** (genuinely, not hidden):
-- The frontend service does not exist on Railway yet — its setup steps
-  above remain a documented plan.
-- Whether Railway's dashboard actually passes a declared variable through
-  as a Docker build `ARG` for a Dockerfile-based service (the app-level
-  mechanism is correct and tested; Railway's specific UI behavior for
-  this isn't something confirmed yet since the frontend service hasn't
-  been created).
-- The real cross-origin request from a deployed frontend to the deployed
-  backend on Railway's actual network (the CORS configuration is correct
-  by inspection of `app/core/config.py`'s `CORS_ORIGINS` handling, and
-  `CORS_ORIGINS` on the live backend is still a `localhost` placeholder
-  pending the frontend's real URL).
 - Railway's actual ephemeral-storage behavior across a real redeploy of
   the backend (documented as expected behavior for this class of
   platform, not yet observed directly on this deployment across a second
   redeploy).
+- A real interactive browser session against the deployed frontend (the
+  signup/CORS verification above used direct HTTP requests with the
+  right headers, not an actual browser) — the underlying mechanism is
+  confirmed correct, but no browser-automation tool is available in this
+  environment to click through the UI itself.
 - (Resolved) The stray `joyful-quietude` Railway project has been
   deleted — see "Stray project (deleted)" above.
