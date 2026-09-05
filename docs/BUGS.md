@@ -2,11 +2,11 @@
 
 ## Summary
 
-Total Issues Found: 8 (running total — updated as testing proceeds)
+Total Issues Found: 11 (running total — updated as testing proceeds)
 
 Critical: 1
-High: 2
-Medium: 5
+High: 4
+Medium: 6
 Low: 0
 
 **A note on scope and honesty:** this environment has no browser-automation
@@ -761,21 +761,271 @@ aliases), `backend/pyproject.toml` (`pythonpath = ["."]`),
 
 ---
 
+## BUG-009 — Frontend container couldn't run standalone at all: nginx refused to start outside Docker Compose's own network
+
+**Severity:** High
+
+**Area:** Infrastructure / Docker / Deployment
+
+**Status:** FIXED
+
+*(Found while preparing to deploy the frontend and backend as two
+separate Railway services — this container had only ever been run via
+`docker-compose.yml`, which supplies a Docker network where the hostname
+`backend` resolves. Nothing before this had run the frontend image any
+other way.)*
+
+### Description
+
+`nginx.conf`'s `location /api/ { proxy_pass http://backend:8000/api/; }`
+resolves the hostname `backend` **eagerly, when nginx loads its config at
+startup** — not lazily per-request. That hostname only exists inside
+Compose's own Docker network. Run the exact same image standalone (a
+plain `docker run`, or as its own Railway service with no Compose network
+present), and nginx fails to even start.
+
+### Steps to Reproduce
+
+```
+docker run --rm -p 8080:80 <frontend-image>
+```
+→ `nginx: [emerg] host not found in upstream "backend" in
+/etc/nginx/conf.d/default.conf:14` — the container exits immediately.
+
+### Expected Behavior
+
+The same image should be able to run as its own standalone service (no
+Compose network needed) — necessary the moment frontend and backend are
+deployed to two separate platforms/services, which was always the plan
+for R2/production per `docs/DEPLOYMENT.md`.
+
+### Actual Behavior
+
+Hard startup crash, not a soft failure — the container never reaches a
+running state at all.
+
+### Root Cause
+
+`proxy_pass` with a literal (non-variable) URL resolves its hostname at
+config-load time. `backend` is only a real hostname inside Compose's
+network; nothing told nginx it was allowed to not-yet-know that address
+until an actual request needed it.
+
+### Proposed Fix
+
+Give nginx its own resolver (Docker's embedded DNS, `127.0.0.11`) and
+reference the upstream through an nginx variable rather than a literal
+string — this defers resolution to request time, so config loading (and
+thus container startup) never depends on `backend` being resolvable at
+all. (See BUG-010 for a second, related bug this same change initially
+introduced.)
+
+### Regression Risk
+
+Low — only affects how/when the `/api/` proxy resolves its target;
+doesn't change any other route, and the location block is unreachable
+anyway whenever `VITE_API_URL` is set at build time (the split-host case
+this fix exists for), since the frontend's own JS calls the real backend
+origin directly rather than this container's `/api/` path.
+
+### Fix Applied
+
+`frontend/nginx.conf.template`: added `resolver 127.0.0.11 valid=10s;`
+and rewrote the proxy target as `set $backend_upstream http://backend:8000; proxy_pass $backend_upstream;`.
+
+### Verification
+
+- `docker run --rm -p 8080:80 <image>` (no Compose network) — nginx now
+  starts and serves `200` on `/`, confirmed live.
+- `docker compose up` — both containers still healthy, unchanged
+  behavior for the topology this was originally built for.
+
+---
+
+## BUG-010 — The fix for BUG-009 introduced a path-duplication bug: `/api/` proxied requests 404'd (`/api//api/v1/...`)
+
+**Severity:** High
+
+**Area:** Infrastructure / Docker
+
+**Status:** FIXED
+
+*(Found immediately after applying BUG-009's fix, by actually testing a
+real request through it rather than only checking that nginx started.)*
+
+### Description
+
+nginx's `proxy_pass` has a documented behavior change once its target
+includes a *variable*: with a literal URL, nginx rewrites the matched
+`location` prefix into whatever URI follows the target in `proxy_pass`
+(so `location /api/ { proxy_pass http://x/api/; }` maps `/api/v1/login` →
+`http://x/api/v1/login`, correctly). With a variable in play, nginx can
+no longer do that rewrite at config-load time — it passes the entire
+original request URI through unchanged, appended after the variable.
+BUG-009's fix kept a `/api/` suffix after the variable
+(`proxy_pass $backend_upstream/api/;`), which — with a variable
+involved — doesn't get treated as a rewrite target at all; it's just
+concatenated in front of the (already `/api/`-prefixed) original request
+URI, duplicating it.
+
+### Steps to Reproduce
+
+With BUG-009's fix applied as first written, through the full
+docker-compose stack: `POST /api/v1/auth/login` via the frontend's nginx
+proxy.
+
+### Expected Behavior
+
+`200`/`401` (a real auth response) — the request should reach
+`http://backend:8000/api/v1/auth/login`.
+
+### Actual Behavior
+
+`404 {"detail":"Not Found"}` — a real FastAPI 404 (confirmed via nginx's
+access log: the request *did* reach the backend container; the body is
+Starlette's own default-404 shape, not nginx's). The actual upstream URL
+nginx constructed was `http://backend:8000/api//api/v1/auth/login` — a
+duplicated `/api/` segment FastAPI has no route for.
+
+### Root Cause
+
+Explained above: a URI written after a variable in `proxy_pass` is not a
+rewrite target, it's a literal prefix — concatenated in front of the full
+original request URI, not replacing any part of it.
+
+### Proposed Fix
+
+Drop the URI entirely from `proxy_pass` when a variable is involved —
+`proxy_pass $backend_upstream;` with nothing after it — so nginx passes
+the complete, correct, un-duplicated original request URI straight
+through.
+
+### Regression Risk
+
+None beyond what BUG-009 already carries — this is a same-day, same-block
+correction before it was ever committed/deployed anywhere.
+
+### Fix Applied
+
+`frontend/nginx.conf.template`: `proxy_pass $backend_upstream/api/;` →
+`proxy_pass $backend_upstream;`.
+
+### Verification
+
+Full round trip through the actual nginx proxy, live: `GET
+/api/v1/health` → `200`; `POST /api/v1/auth/signup` → `201` with real
+tokens; `GET /api/v1/auth/me` with the returned token → `200` with the
+correct user. Re-confirmed the standalone (no-Compose) case from BUG-009
+still starts and serves correctly after this second change too.
+
+---
+
+## BUG-011 — Frontend Dockerfile had no way to receive `VITE_API_URL`, and was hardcoded to port 80 (PaaS hosts inject a dynamic `$PORT`)
+
+**Severity:** Medium
+
+**Area:** Infrastructure / Docker / Deployment
+
+**Status:** FIXED
+
+*(Found while preparing to deploy the frontend as its own Railway
+service, alongside BUG-009/010 — the same underlying cause: this image
+had only ever been built/run through `docker-compose.yml`, which never
+needed either.)*
+
+### Description
+
+Two related gaps, both invisible under Docker Compose specifically:
+
+1. Vite only reads `VITE_*` variables **at build time**, baking them into
+   the static JS — there's no such thing as a "runtime env var" for an
+   already-built bundle. The Dockerfile's build stage had no `ARG`/`ENV`
+   to receive `VITE_API_URL` at all, so a split-host deployment (frontend
+   and backend as separate services on different domains — exactly the
+   Railway plan) would silently bake in the fallback relative `/api/v1`
+   path instead, which only resolves correctly behind this container's
+   own nginx proxy — never against a separate backend service's domain.
+2. nginx's config had a hardcoded `listen 80;` and the `HEALTHCHECK`
+   hit a hardcoded port 80 — most PaaS hosts (Railway included) inject a
+   dynamic `PORT` and expect the container to bind to it, exactly the
+   same class of bug as BUG-001/the backend's own Dockerfile fix earlier
+   in this file.
+
+### Steps to Reproduce
+
+1. `docker build --build-arg VITE_API_URL=https://example.com/api/v1 .`
+   then inspect the built JS bundle — before the fix, the string never
+   appears there at all; the build had no mechanism to receive it.
+2. `docker run -e PORT=9700 ...` — before the fix, nginx still listens on
+   80 regardless, ignoring the injected port entirely.
+
+### Expected Behavior
+
+The image should bake in a real backend URL when given one, and bind to
+whatever port the platform tells it to.
+
+### Actual Behavior
+
+Neither happened — both silently ignored.
+
+### Root Cause
+
+Never built — this Dockerfile predates any split-host deployment plan;
+Docker Compose's shared network made both gaps invisible.
+
+### Proposed Fix
+
+Declare `ARG VITE_API_URL` + `ENV VITE_API_URL=$VITE_API_URL` before the
+build step (so `docker build --build-arg` works, and any platform that
+passes build args through a Dockerfile build gets it too). Convert
+`nginx.conf` into `nginx.conf.template`, using nginx's own official
+`envsubst`-on-templates entrypoint mechanism to substitute `${PORT}` at
+container start, with `ENV PORT=80` as the default for plain
+`docker run`/Compose, where nothing else sets it.
+
+### Regression Risk
+
+Low — purely additive (a new build ARG, a template mechanism that
+produces identical output — verified — when `PORT` is unset/80).
+
+### Fix Applied
+
+`frontend/Dockerfile`: added the `ARG`/`ENV` pair before `RUN npm run
+build`; `nginx.conf` → `nginx.conf.template`, copied to
+`/etc/nginx/templates/default.conf.template` instead of directly to
+`conf.d`; `ENV PORT=80` default; `HEALTHCHECK` made shell-form to expand
+`${PORT}`.
+
+### Verification
+
+- `docker build --build-arg VITE_API_URL=https://fake-backend.example.com/api/v1 .` then `docker run -e PORT=9700 -p 9700:9700 <image>`:
+  responded `200` on port **9700** (not 80), and the built JS bundle
+  (`grep`-confirmed) contains `fake-backend.example.com/api/v1` literally.
+- Default build/run (no `PORT`, no `VITE_API_URL` — the docker-compose
+  case): unchanged, `listen 80`, relative `/api/` behavior preserved,
+  regression-checked directly.
+
+---
+
 # Final QA Summary
 
 ## Total Issues Found
 
-8
+11
 
 ## Fixed
 
-8 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
+11 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
 BUG-005 Medium — found while actually getting Docker running, in a
 follow-up session after the rest of this file was first written —
 BUG-006 Medium and BUG-007 Medium — found during a dedicated storage-
 architecture review in a further follow-up session — BUG-CI-001 High —
 found while diagnosing a real, reported backend CI failure in a further
-follow-up session)
+follow-up session — BUG-009 High, BUG-010 High, BUG-011 Medium — found
+while actually deploying, when the frontend was run standalone/on Railway
+for the first time ever, in a further follow-up session. (BUG-008 is not
+missing — it was never allocated to a shipped fix; skipping straight to
+009 rather than renumbering everything above it.))
 
 ## Remaining
 

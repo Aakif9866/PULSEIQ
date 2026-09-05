@@ -1,0 +1,43 @@
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Docker's embedded DNS — needed so proxy_pass below resolves at
+    # *request* time, not when nginx loads its config. Without this,
+    # nginx refuses to even start anywhere the "backend" hostname isn't
+    # resolvable (any standalone run, Railway, anywhere outside Compose's
+    # own network) — a hard startup failure, not just a dead route.
+    resolver 127.0.0.11 valid=10s;
+
+    # Proxy API calls to the backend service inside the Compose network.
+    # Only reachable when the frontend calls a *relative* /api/ path, i.e.
+    # VITE_API_URL was left unset at build time — a split-host deployment
+    # (frontend and backend on different platforms/domains) sets
+    # VITE_API_URL to the backend's real origin instead, and the built JS
+    # calls that directly, bypassing this proxy (and this whole block)
+    # entirely, so "backend" never needing to resolve there is fine.
+    location /api/ {
+        set $backend_upstream http://backend:8000;
+        # No URI after the variable, deliberately — with a variable in
+        # proxy_pass, nginx can't rewrite/strip the matched location
+        # prefix at config time, so it passes the *entire* original
+        # request URI through as-is. Adding "/api/" here would duplicate
+        # it (the original URI already starts with /api/), 404-ing every
+        # request — found and fixed by actually testing this, not assumed.
+        proxy_pass $backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SPA fallback — client-side routing.
+    location / {
+        try_files $uri /index.html;
+    }
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+}
