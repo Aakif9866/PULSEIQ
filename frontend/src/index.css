@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/*
+  PulseIQ design tokens — dark-first analytics workspace.
+  Deep neutral backgrounds, restrained accent, crisp 1px borders.
+  Light theme is a secondary/legacy surface, not the primary target.
+*/
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", monospace;
+
+  /* Base neutrals (dark) */
+  --color-canvas: #08090b;
+  --color-surface: #101114;
+  --color-surface-raised: #16181c;
+  --color-border: #24262b;
+  --color-border-strong: #34363c;
+
+  --color-fg: #e7e8ea;
+  --color-fg-muted: #9a9da5;
+  --color-fg-subtle: #6b6e76;
+
+  /* Accent — restrained signal blue, used sparingly */
+  --color-accent: #4f8ef7;
+  --color-accent-fg: #eaf1ff;
+  --color-accent-muted: #1c2b45;
+
+  /* Semantic */
+  --color-positive: #3fb27f;
+  --color-negative: #e2604f;
+  --color-warning: #d6a24a;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-muted);
+    color: var(--color-accent-fg);
+  }
+
+  * {
+    border-color: var(--color-border);
+  }
+
+  /* Compact, professional scrollbars — this is a data-dense app */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+    border: 2px solid var(--color-canvas);
+  }
+}
+
+@layer utilities {
+  .grid-backdrop {
+    background-image:
+      linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 60% 60% at 50% 0%, black 40%, transparent 100%);
+  }
+}
