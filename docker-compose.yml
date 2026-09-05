@@ -9,8 +9,9 @@ services:
       - "8000:8000"
     volumes:
       - pulseiq_uploads:/app/data/uploads
-    command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # No command override — the image's own Dockerfile CMD already runs
+    # migrations then uvicorn (and respects $PORT, defaulting to 8000
+    # when nothing sets it, exactly as here).
 
   frontend:
     build:

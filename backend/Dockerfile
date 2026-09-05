@@ -18,7 +18,13 @@ COPY . .
 
 EXPOSE 8000
 
+# Shell form (not exec-form CMD) so $PORT actually expands — most PaaS
+# hosts (Railway included) inject a dynamic PORT and expect the container
+# to bind to it; ${PORT:-8000} keeps 8000 as the default for docker-compose
+# and plain `docker run`, where nothing sets PORT. Migrations run here
+# too, so this image is correct standalone (Railway builds the Dockerfile
+# directly, with no docker-compose.yml in the picture to supply that step).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/api/v1/health || exit 1
+    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1'
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
