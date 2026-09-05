@@ -1112,14 +1112,14 @@ doesn't repeat the mistake.
   returned `200` with body `{"status":"ok","storage_provider":"local"}` —
   a real HTTP request against the live Railway deployment, not a local
   simulation.
-- The stray `joyful-quietude` project's service was **not** modified —
-  it's a duplicate/orphaned project from an earlier failed "New Project"
-  attempt (confirmed via `railway api` query: same repo, no
-  `rootDirectory`, no unique purpose), not part of the intended
-  architecture (one project, two services — documented in
-  `docs/DEPLOYMENT.md`). Left for the account owner to decide whether to
-  delete it or apply the same fix, rather than unilaterally deleting a
-  Railway project.
+- The stray `joyful-quietude` project — confirmed via `railway api` query
+  to be a duplicate/orphaned project from an earlier failed "New
+  Project" attempt (same repo, no `rootDirectory`, no unique purpose,
+  not part of the intended one-project/two-services architecture) — was
+  presented to the account owner, who chose deletion. Deleted via
+  `railway api` (`projectDelete`), confirmed gone from `railway project
+  list`. Its failing `joyful-quietude - PULSEIQ` check will no longer
+  appear on future commits.
 
 ---
 

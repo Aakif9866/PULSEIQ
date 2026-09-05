@@ -109,16 +109,16 @@ manual dashboard fields but doesn't replace the steps below.
    https://pulseiq-production-0585.up.railway.app/api/v1/health` returned
    `200` with exactly that body.
 
-### Known stray project
+### Stray project (deleted)
 
 An earlier round of "New Project from GitHub repo" attempts (while first
-figuring out Railway's UI) left a second, unrelated Railway project
+figuring out Railway's UI) had left a second, unrelated Railway project
 (`joyful-quietude`) with its own `PULSEIQ` service pointed at the same
 repo, no root directory configured, failing the same way the main
-service used to. It is not part of this deployment plan (one project,
-two services) — decide whether to delete it or apply the same
-`rootDirectory`/`Dockerfile` fix to it; it was left untouched rather than
-deleted unilaterally.
+service used to. It was not part of this deployment plan (one project,
+two services), so it was deleted (account owner's choice, via `railway
+api`'s `projectDelete`) rather than fixed — confirmed gone from `railway
+project list`.
 
 ## Frontend on Railway (second service)
 
@@ -243,5 +243,5 @@ possible:
   the backend (documented as expected behavior for this class of
   platform, not yet observed directly on this deployment across a second
   redeploy).
-- The stray `joyful-quietude` Railway project's own failing deployment —
-  left untouched; see "Known stray project" above.
+- (Resolved) The stray `joyful-quietude` Railway project has been
+  deleted — see "Stray project (deleted)" above.
