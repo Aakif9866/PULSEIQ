@@ -7,11 +7,14 @@ import logging
 import sys
 
 import structlog
+from structlog.typing import EventDict, WrappedLogger
 
 _SENSITIVE_KEYS = {"password", "token", "access_token", "refresh_token", "api_key", "secret"}
 
 
-def _redact_sensitive(_logger: object, _method_name: str, event_dict: dict) -> dict:
+def _redact_sensitive(
+    _logger: WrappedLogger, _method_name: str, event_dict: EventDict
+) -> EventDict:
     for key in list(event_dict.keys()):
         if key.lower() in _SENSITIVE_KEYS:
             event_dict[key] = "***redacted***"

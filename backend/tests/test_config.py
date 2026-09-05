@@ -18,6 +18,11 @@ def test_production_accepts_a_real_secret_with_debug_off():
     assert settings.ENVIRONMENT == "production"
 
 
-def test_development_allows_the_default_secret_key():
+def test_development_allows_the_default_secret_key(monkeypatch):
+    # Isolate from whatever's in the ambient environment — CI's own job
+    # sets a real SECRET_KEY for every step (including this test), which
+    # pydantic-settings would otherwise read ahead of the class default,
+    # since env vars outrank it for any field not passed explicitly here.
+    monkeypatch.delenv("SECRET_KEY", raising=False)
     settings = Settings(ENVIRONMENT="development")
     assert settings.SECRET_KEY == "insecure-dev-secret-change-me"

@@ -2,10 +2,10 @@
 
 ## Summary
 
-Total Issues Found: 7 (running total — updated as testing proceeds)
+Total Issues Found: 8 (running total — updated as testing proceeds)
 
 Critical: 1
-High: 1
+High: 2
 Medium: 5
 Low: 0
 
@@ -627,19 +627,155 @@ against the service layer directly.
 
 ---
 
+## BUG-CI-001 — Backend CI failing (`CI / Backend (lint, typecheck, test)`)
+
+**Severity:** High
+
+**Area:** CI / Backend / Tooling
+
+**Status:** FIXED
+
+### Description
+
+The backend CI job was failing while frontend CI passed. Reproduced by
+cloning the pushed repo into a fresh directory, building a fresh Python
+3.12 venv, and running the exact four commands the workflow runs, with
+the exact same job-level environment variables (`DATABASE_URL`,
+`ENVIRONMENT=test`, `SECRET_KEY=ci-only-secret-not-for-real-use`) and
+**no manually-exported `PYTHONPATH`** — which is precisely what I'd been
+doing locally, out of habit, every single time I ran these commands
+throughout this project, without ever noticing the actual `ci.yml` never
+sets it. That gap between "what I verified locally" and "what CI actually
+runs" is what let all of the below go unnoticed until now.
+
+Four independent, stacked causes — fixing the first would only have
+exposed the next:
+
+**1. `ruff check .` — 26 pre-existing lint errors, all in `alembic/`.**
+Every previous local check this project ran was scoped to `ruff check app`
+or `ruff check app tests` — never the `.` (whole `backend/` directory)
+that CI's workflow actually runs — so lint debt in `alembic/env.py` and
+every migration file (unsorted imports, `typing.Sequence`/`Union` instead
+of `collections.abc.Sequence`/`X | Y`) was never actually checked, let
+alone fixed.
+*Fix:* `ruff check --fix .` — 31 fixes, entirely mechanical import
+modernization, zero semantic change (confirmed via diff review).
+
+**2. `mypy app` — 1 real type error in `app/core/logging.py`.** This had
+been carried as an accepted "pre-existing cosmetic nit" across every prior
+phase of this project — but `mypy` exits non-zero on any error, so it was
+silently failing CI's typecheck step the whole time. Root cause:
+`_redact_sensitive`'s hand-written signature (`_logger: object`,
+`event_dict: dict`, return `dict`) didn't structurally match structlog's
+own `Processor` type alias.
+*Fix:* typed it against structlog's own exported aliases
+(`structlog.typing.WrappedLogger`, `structlog.typing.EventDict`) instead
+of approximating the signature by hand — the correct fix, not a
+`# type: ignore`.
+
+**3. `pytest` — `ModuleNotFoundError: No module named 'app'`.** `tests/`
+has no `__init__.py`, so pytest's own rootdir-insertion adds `tests/` to
+`sys.path`, not `backend/` (where `app/` actually lives). Every previous
+local test run this project ran manually exported `PYTHONPATH=.` first;
+the CI workflow never has, and never needed to if the project itself were
+configured correctly. (Note: `alembic upgrade head` was never affected —
+`alembic.ini` already has `prepend_sys_path = .`, which is alembic's own
+equivalent mechanism; I'd mistakenly attributed my habitual `PYTHONPATH=.`
+exports to alembic too, when it was only ever pytest that needed it.)
+*Fix:* added `pythonpath = ["."]` to `[tool.pytest.ini_options]` in
+`backend/pyproject.toml` — pytest's own first-class, official mechanism
+for exactly this layout, so it works identically for anyone (local, CI,
+or a future contributor) with zero required environment ceremony. Not a
+CI-only patch to the workflow's `env:` block, which would only have fixed
+it for CI specifically.
+
+**4. `test_config.py::test_development_allows_the_default_secret_key`
+— a real test hermeticity bug.** The test asserts that `Settings()`
+falls back to its hardcoded default `SECRET_KEY` — but never isolates
+itself from the ambient environment. CI's job-level `env:` sets a real
+`SECRET_KEY` for every step in the job (including this test), and
+pydantic-settings reads real environment variables ahead of a field's
+class-level default for any field not passed explicitly to the
+constructor — so the test asserted a default that the environment was
+actively overriding, and failed. The other three tests in the same file
+were unaffected because each passes every relevant field explicitly.
+*Fix:* `monkeypatch.delenv("SECRET_KEY", raising=False)` before
+constructing `Settings` — makes the test's own isolation explicit and
+correct, rather than relying on nobody's shell happening to have that
+variable set.
+
+### Steps to Reproduce
+
+1. Clone the repo fresh into an empty directory (isolates from any local
+   `.venv`, `__pycache__`, or exported shell state).
+2. Build a fresh Python 3.12 venv, `pip install -r requirements-dev.txt`.
+3. Start a real Postgres matching the workflow's `services.postgres`
+   config (`pulseiq`/`pulseiq`/`pulseiq`).
+4. Export exactly `DATABASE_URL`, `ENVIRONMENT=test`,
+   `SECRET_KEY=ci-only-secret-not-for-real-use` — nothing else.
+5. Run, in order: `ruff check .`, `mypy app`, `alembic upgrade head`,
+   `pytest` — each one reproduced its failure exactly as described above.
+
+### Root Cause
+
+Summarized above per stage — in one sentence: local verification
+throughout this project always used a narrower/more-forgiving command or
+environment than what the actual CI workflow runs, so four real (if
+mostly small) defects accumulated without ever being caught.
+
+### Proposed Fix
+
+See the four fixes above — each addresses its actual root cause; none
+disables, skips, or suppresses a check.
+
+### Regression Risk
+
+Very low. Three of the four changes are mechanical/additive (lint auto-
+fix, a type annotation matching the library's own contract, a test
+isolating itself with `monkeypatch`); the `pythonpath` addition only
+affects how `app` is discovered during test collection, not runtime
+behavior.
+
+### Fix Applied
+
+`backend/alembic/env.py` + all 5 `backend/alembic/versions/*.py` (ruff
+`--fix`), `backend/app/core/logging.py` (typed against structlog's own
+aliases), `backend/pyproject.toml` (`pythonpath = ["."]`),
+`backend/tests/test_config.py` (`monkeypatch.delenv`).
+
+### Verification
+
+- Lint: PASS (`ruff check .` — 0 errors, was 26)
+- Typecheck: PASS (`mypy app` — 0 errors, was 1)
+- Tests: PASS (48/48, was 47/48)
+- All four re-verified twice: once in a fresh, isolated clone (to
+  confirm the fix works with zero dependency on this session's
+  accumulated local state), and again in the actual project directory.
+- Frontend CI: untouched, no changes made there.
+- **Honest limitation:** this file records verification of the exact
+  commands and environment the workflow runs, reproduced locally and in
+  an isolated fresh clone — not a completed GitHub Actions run, since
+  that only resolves once these changes are actually pushed. Don't take
+  "backend CI passing" as confirmed until the next real workflow run
+  shows it.
+
+---
+
 # Final QA Summary
 
 ## Total Issues Found
 
-7
+8
 
 ## Fixed
 
-7 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
+8 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
 BUG-005 Medium — found while actually getting Docker running, in a
 follow-up session after the rest of this file was first written —
 BUG-006 Medium and BUG-007 Medium — found during a dedicated storage-
-architecture review in a further follow-up session)
+architecture review in a further follow-up session — BUG-CI-001 High —
+found while diagnosing a real, reported backend CI failure in a further
+follow-up session)
 
 ## Remaining
 

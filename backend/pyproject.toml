@@ -9,6 +9,13 @@ ignore = ["B008"]  # FastAPI's Depends() default-arg pattern
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+# tests/ has no __init__.py, so pytest's own rootdir-insertion adds tests/
+# to sys.path, not backend/ (where `app` actually lives) — `import app`
+# fails with a bare `pytest` unless something adds backend/ itself. This is
+# pytest's own first-class mechanism for that, so it works identically
+# locally, in CI, or for any other contributor — no PYTHONPATH env var
+# needed anywhere.
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.12"
