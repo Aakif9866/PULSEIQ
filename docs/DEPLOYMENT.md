@@ -3,18 +3,18 @@
 What's needed to deploy PulseIQ, and — importantly — what's actually been
 verified versus what's still a documented plan.
 
-**Honesty check first: as of this writing, PulseIQ has not been deployed
-to Railway yet** — a target has been chosen (this document) and every
-piece of it has been verified locally in a way that closely simulates the
-real platform, but the actual dashboard-driven account setup (creating the
-services, connecting GitHub, pasting in environment variables) requires
-the account owner's own hands — nothing here claims that step has
-happened until it demonstrably has.
+**Honesty check first:** the backend is now genuinely deployed and live on
+Railway — verified with a real HTTP request against the deployed URL, not
+assumed (see "Backend on Railway" below). The frontend has **not** been
+deployed yet; its setup steps below remain a documented plan until that
+service actually exists and has been verified the same way.
 
 ## Current deployment mode
 
-**Local storage, run via Docker Compose or natively — not yet deployed to
-a hosting platform.**
+**Backend: live on Railway** (`https://pulseiq-production-0585.up.railway.app`,
+verified via `GET /api/v1/health` → `200`). **Frontend: not yet deployed**
+— still run via Docker Compose or natively for now. **Database:** Neon,
+unchanged. **Storage:** local disk (see limitation below).
 
 ## Chosen deployment target
 
@@ -74,9 +74,16 @@ manual dashboard fields but doesn't replace the steps below.
 2. In the service's **Settings**, find where it shows the connected repo
    (labeled differently across Railway UI versions — "Source", "Source
    Repo", or just the repo name with an edit icon) → set **Root
-   Directory** to `backend`. Railway should then find
-   `backend/Dockerfile` and `backend/railway.json` and switch to a Docker
-   build. Redeploy if it doesn't happen automatically.
+   Directory** to `backend`, **Builder** to `Dockerfile`, and
+   **Dockerfile Path** to `Dockerfile` — **not** `backend/Dockerfile`.
+   This is a real gotcha found and fixed while deploying (BUG-012 in
+   `docs/BUGS.md`): once Root Directory is `backend`, the Dockerfile path
+   is resolved *relative to that root*, not the repo root — setting it to
+   `backend/Dockerfile` makes Railway look for a nonexistent
+   `backend/backend/Dockerfile`, which silently falls back to Railpack's
+   Python auto-detection (`No start command detected`) instead of an
+   obvious error. Redeploy if the change doesn't take effect
+   automatically.
 3. Add these environment variables (Variables tab):
 
    | Variable | Value |
@@ -93,11 +100,25 @@ manual dashboard fields but doesn't replace the steps below.
    | `CORS_ORIGINS` | `["https://<your-frontend-service>.up.railway.app"]` — fill in once the frontend service (below) gives you its real URL; a placeholder here until then just means CORS blocks the frontend, not a security hole |
 
    Do **not** set `PORT` — Railway injects it automatically.
-4. Deploy. Railway gives you a URL like
-   `https://pulseiq-backend-production.up.railway.app` — copy it, it's
-   needed for the frontend service.
+4. Deploy. Railway gives you a URL — the live backend is currently at
+   `https://pulseiq-production-0585.up.railway.app`; copy your own
+   service's URL, it's needed for the frontend service.
 5. Confirm it's alive: `curl https://<your-railway-backend-url>/api/v1/health`
-   should return `{"status":"ok","storage_provider":"local"}`.
+   should return `{"status":"ok","storage_provider":"local"}`. **Verified
+   against the real deployment**: `curl
+   https://pulseiq-production-0585.up.railway.app/api/v1/health` returned
+   `200` with exactly that body.
+
+### Known stray project
+
+An earlier round of "New Project from GitHub repo" attempts (while first
+figuring out Railway's UI) left a second, unrelated Railway project
+(`joyful-quietude`) with its own `PULSEIQ` service pointed at the same
+repo, no root directory configured, failing the same way the main
+service used to. It is not part of this deployment plan (one project,
+two services) — decide whether to delete it or apply the same
+`rootDirectory`/`Dockerfile` fix to it; it was left untouched rather than
+deleted unilaterally.
 
 ## Frontend on Railway (second service)
 
@@ -174,32 +195,53 @@ the only schema-management mechanism.
 
 ## Verified vs. not yet verified
 
+**Verified on the real platform**, not just simulated locally:
+- The backend service (`PULSEIQ`, project `PulseIQ`) actually builds from
+  `backend/Dockerfile` on Railway (`build.builder = "DOCKERFILE"`,
+  `build.dockerfilePath = "Dockerfile"` relative to `rootDirectory =
+  "backend"`) — confirmed via that deployment's own build logs, not just
+  the pending config.
+- The deployment reached a terminal `SUCCESS` status (polled via
+  `railway deployment list --json`, not assumed from a queued/building
+  state).
+- `curl https://pulseiq-production-0585.up.railway.app/api/v1/health`
+  returned `200` with body `{"status":"ok","storage_provider":"local"}` —
+  a real HTTP request against Railway's actual infrastructure.
+- All environment variables (`DATABASE_URL` pointing at the real Neon
+  instance, `SECRET_KEY`, `GROQ_API_KEY`, etc.) are live on that service.
+
 **Verified locally**, standing in for the real platform as closely as
 possible:
-- The exact Railway backend runtime contract (dynamic `$PORT`,
-  Dockerfile-only build, no compose file, a real non-placeholder
-  `SECRET_KEY`, `ENVIRONMENT=production`) — via `docker run` with those
-  exact conditions, not just `docker compose up`.
 - The exact Railway frontend runtime contract — standalone `docker run`
   with a dynamic `$PORT` and a `--build-arg VITE_API_URL`, matching what
-  a Railway service actually does (mechanism, not the platform itself).
+  a Railway service actually does (mechanism, not the platform itself —
+  no frontend Railway service exists yet).
 - `docker-compose.yml` still works identically after every fix above
   (regression-checked repeatedly: both containers build and report
   `healthy`, a real signup+login round-tripped through the containerized
   nginx proxy, same as before every change).
+- Backend lint (`ruff`), typecheck (`mypy`), and the full test suite
+  (48/48 passing) all re-run clean locally after this deployment fix;
+  frontend lint (`oxlint`), typecheck (`tsc`), and production build all
+  clean too. No application code changed — this was a Railway service
+  configuration fix only.
 
 **Not yet verified** (genuinely, not hidden):
-- An actual deployment to Railway's real infrastructure, for either
-  service.
+- The frontend service does not exist on Railway yet — its setup steps
+  above remain a documented plan.
 - Whether Railway's dashboard actually passes a declared variable through
   as a Docker build `ARG` for a Dockerfile-based service (the app-level
   mechanism is correct and tested; Railway's specific UI behavior for
-  this isn't something I have access to confirm without the account
-  owner's own dashboard).
-- The real cross-origin request from a deployed frontend to a deployed
+  this isn't something confirmed yet since the frontend service hasn't
+  been created).
+- The real cross-origin request from a deployed frontend to the deployed
   backend on Railway's actual network (the CORS configuration is correct
-  by inspection of `app/core/config.py`'s `CORS_ORIGINS` handling, not by
-  having watched a real browser request succeed against it there).
-- Railway's actual ephemeral-storage behavior across a real redeploy
-  (documented as expected behavior for this class of platform, not
-  observed directly on Railway specifically).
+  by inspection of `app/core/config.py`'s `CORS_ORIGINS` handling, and
+  `CORS_ORIGINS` on the live backend is still a `localhost` placeholder
+  pending the frontend's real URL).
+- Railway's actual ephemeral-storage behavior across a real redeploy of
+  the backend (documented as expected behavior for this class of
+  platform, not yet observed directly on this deployment across a second
+  redeploy).
+- The stray `joyful-quietude` Railway project's own failing deployment —
+  left untouched; see "Known stray project" above.

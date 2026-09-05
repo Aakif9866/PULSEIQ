@@ -2,10 +2,10 @@
 
 ## Summary
 
-Total Issues Found: 11 (running total — updated as testing proceeds)
+Total Issues Found: 12 (running total — updated as testing proceeds)
 
 Critical: 1
-High: 4
+High: 5
 Medium: 6
 Low: 0
 
@@ -1005,17 +1005,133 @@ build`; `nginx.conf` → `nginx.conf.template`, copied to
   case): unchanged, `listen 80`, relative `/api/` behavior preserved,
   regression-checked directly.
 
+## BUG-012 — Railway backend deployment failed: `dockerfilePath` set relative to the repo root instead of the service's `rootDirectory`, so Railway never used the Dockerfile at all
+
+**Severity:** High
+
+**Area:** Infrastructure / Deployment (Railway)
+
+**Status:** FIXED
+
+### Description
+
+The Railway backend service (`PULSEIQ`, project `PulseIQ`) had
+`source.rootDirectory = "backend"` and `build.dockerfilePath =
+"backend/Dockerfile"` set via the Railway API. Every deploy still used
+Railway's Railpack auto-detection builder instead of the Dockerfile,
+which detected Python via `pip` and failed with `No start command
+detected` before a container ever ran. This is what GitHub reported as
+the failing `PulseIQ - PULSEIQ — Deployment` check. A second, unrelated
+Railway project (`joyful-quietude`, created earlier while trying
+different "New Project from GitHub repo" attempts) has its own `PULSEIQ`
+service pointed at the same repo with no root directory or Dockerfile
+config at all, and fails the same way — reported as the
+`joyful-quietude - PULSEIQ — Deployment` check. Both checks share the
+same underlying class of cause (Railway never switching to a Docker
+build) but are two independent service configs, not one shared bug.
+
+### Steps to Reproduce
+
+1. `railway status --json` on the `PULSEIQ` service showed the latest
+   deployment's frozen `serviceManifest` with `builder: "RAILPACK"`,
+   `rootDirectory: null`, `dockerfilePath: null` — i.e. whatever config
+   had been set previously was never actually picked up by a real
+   deploy.
+2. `railway logs --service PULSEIQ --build --json` on that deployment
+   showed Railpack's own log output: `Detected Python`, `Using pip`,
+   `✖ No start command detected`, then the build process exiting 1.
+3. `railway environment config --json` showed the *currently configured*
+   (not yet re-deployed) values: `build.builder = "DOCKERFILE"`,
+   `build.dockerfilePath = "backend/Dockerfile"`, `source.rootDirectory =
+   "backend"` — this is the actual root cause: with `rootDirectory`
+   already scoping the build context to `backend/`, `dockerfilePath` is
+   resolved *relative to that root*, so the correct value is `Dockerfile`
+   — `backend/Dockerfile` resolves to a nonexistent
+   `backend/backend/Dockerfile`, and Railway silently falls back to
+   Railpack auto-detection rather than erroring loudly about the missing
+   path.
+
+### Expected Behavior
+
+With a Dockerfile present in the service's root directory, Railway
+should build from it and run the app inside the container, honoring the
+Dockerfile's own `CMD` (migrations + `uvicorn` bound to `$PORT`) and the
+configured `healthcheckPath`.
+
+### Actual Behavior
+
+Railway silently ignored the Dockerfile and fell back to Railpack's
+Python auto-detection, which has no way to know this project starts via
+`uvicorn` inside a container, and failed outright.
+
+### Root Cause
+
+`build.dockerfilePath` was set as a full repo-relative path
+(`"backend/Dockerfile"`) while `source.rootDirectory` (`"backend"`) had
+already scoped the build context — the two fields compose (path is
+resolved inside the root directory, not from the repo root), so the
+effective path Railway looked for did not exist. Confirmed by setting
+`dockerfilePath` to `"Dockerfile"` (relative to the already-set
+`rootDirectory`) via a JSON `environment edit` patch and observing the
+very next deployment's build logs actually invoke the Dockerfile build
+stages instead of Railpack.
+
+### Proposed Fix
+
+Set `build.dockerfilePath = "Dockerfile"` (not `"backend/Dockerfile"`)
+on the `PULSEIQ` service, given `rootDirectory` is already `"backend"`.
+No application code changes required — this was a platform
+configuration value only.
+
+### Regression Risk
+
+None — no code changed; this only corrects a Railway service config
+field.
+
+### Fix Applied
+
+Ran `railway environment edit --json` with a patch setting
+`services.<serviceId>.build = {"builder": "DOCKERFILE", "dockerfilePath":
+"Dockerfile"}` and `source = {"rootDirectory": "backend"}` on the
+`PULSEIQ` service in the `PulseIQ` project, then `railway redeploy
+--from-source`. `docs/DEPLOYMENT.md` step 2 (backend setup) updated to
+call out this exact gotcha explicitly, so re-creating the service later
+doesn't repeat the mistake.
+
+### Verification
+
+- `railway deployment list --service PULSEIQ --json` on the new
+  deployment showed `serviceManifest.build.builder = "DOCKERFILE"` and
+  `dockerfilePath = "Dockerfile"` actually baked into that deployment
+  (not just the pending config) — the build logs for it show real
+  Docker build stages (`npm ci`/`pip install`-equivalent steps for this
+  Dockerfile), not Railpack's Python auto-detection banner.
+- The deployment reached `SUCCESS` (polled via `railway deployment list
+  --json` until a terminal status, not assumed from a queued state).
+- `curl https://pulseiq-production-0585.up.railway.app/api/v1/health`
+  returned `200` with body `{"status":"ok","storage_provider":"local"}` —
+  a real HTTP request against the live Railway deployment, not a local
+  simulation.
+- The stray `joyful-quietude` project's service was **not** modified —
+  it's a duplicate/orphaned project from an earlier failed "New Project"
+  attempt (confirmed via `railway api` query: same repo, no
+  `rootDirectory`, no unique purpose), not part of the intended
+  architecture (one project, two services — documented in
+  `docs/DEPLOYMENT.md`). Left for the account owner to decide whether to
+  delete it or apply the same fix, rather than unilaterally deleting a
+  Railway project.
+
 ---
 
 # Final QA Summary
 
 ## Total Issues Found
 
-11
+12
 
 ## Fixed
 
-11 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
+12 (BUG-001 Critical, BUG-002 Medium, BUG-003 High, BUG-004 Medium,
 BUG-005 Medium — found while actually getting Docker running, in a
 follow-up session after the rest of this file was first written —
 BUG-006 Medium and BUG-007 Medium — found during a dedicated storage-
@@ -1023,9 +1139,11 @@ architecture review in a further follow-up session — BUG-CI-001 High —
 found while diagnosing a real, reported backend CI failure in a further
 follow-up session — BUG-009 High, BUG-010 High, BUG-011 Medium — found
 while actually deploying, when the frontend was run standalone/on Railway
-for the first time ever, in a further follow-up session. (BUG-008 is not
-missing — it was never allocated to a shipped fix; skipping straight to
-009 rather than renumbering everything above it.))
+for the first time ever, in a further follow-up session — BUG-012 High —
+found while diagnosing a real, reported Railway deployment failure in a
+further follow-up session. (BUG-008 is not missing — it was never
+allocated to a shipped fix; skipping straight to 009 rather than
+renumbering everything above it.))
 
 ## Remaining
 
