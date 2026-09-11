@@ -6,6 +6,7 @@ import {
   Database,
   LayoutDashboard,
   LogOut,
+  Radar,
   Settings,
   Sparkles,
   SquareStack,
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { to: '/workspace/dashboards', label: 'Dashboards', icon: LayoutDashboard },
   { to: '/workspace/ai-analyst', label: 'AI Analysis', icon: Sparkles },
   { to: '/workspace/insights', label: 'Saved Insights', icon: Activity },
+  { to: '/workspace/monitors', label: 'Monitors', icon: Radar },
   { to: '/workspace/settings', label: 'Settings', icon: Settings },
 ]
 

@@ -1,7 +1,11 @@
 # PulseIQ V2 Vision
 
-**Status of this document: planning only. Nothing described here is
-implemented. V1 remains the deployed, working application.**
+**Status of this document: planning only, with one exception — the "AI
+Anomaly Monitoring / Data Pulse" section below is now actually implemented
+(on the `feature/pulseiq-v2-roadmap` branch, not merged/deployed), because
+it was built directly as part of writing this plan. Everything else in
+this document remains planning only. V1's deployed application is
+unaffected either way.**
 
 ## Where PulseIQ is today
 
@@ -34,6 +38,11 @@ order:
 4. **Trustworthy data at scale** — today storage is local disk (ephemeral on
    Railway) and profiling is a handful of stats. Real self-service analytics
    needs data quality visibility and storage that survives a redeploy.
+5. **Proactive awareness** — today PulseIQ only ever answers a question the
+   user asks. It has no way to notice, on its own, that something in the
+   data changed. "AI Anomaly Monitoring / Data Pulse" (below) is this
+   pillar — and, uniquely among the five, it's now actually built, not just
+   planned.
 
 This roadmap is scoped for **one developer, working gradually, on a
 portfolio project** — not a team, not an enterprise system. Every phase in
@@ -70,16 +79,26 @@ dependency that's declared but never used.
 
 ### 4. What should V2 become?
 
-The four pillars above: a real (but safely sandboxed) SQL layer, richer
+The five pillars above: a real (but safely sandboxed) SQL layer, richer
 dashboards with AI-assisted chart selection, persistent analytics history,
-and durable object storage with real data-quality visibility.
+durable object storage with real data-quality visibility, and proactive
+anomaly monitoring.
 
 ### 5. Which features should be implemented first?
 
-Natural Language to SQL (Phase 1) and SQL Explorer (Phase 2) — see
-"Recommended implementation order" reasoning in `docs/V2_FEATURES.md`. They
-directly extend the project's existing, best-understood strength (the query
-layer) and finally give the already-declared DuckDB dependency a real job.
+**As originally reasoned** (query-layer-adjacent work extending an
+existing strength): Natural Language to SQL (Phase 1) and SQL Explorer
+(Phase 2) — see `docs/V2_FEATURES.md`.
+
+**As actually built**: AI Anomaly Monitoring / Data Pulse ended up first,
+by direct request — it's a fundamentally different capability (proactive,
+not reactive) rather than an extension of the query layer, so it didn't
+need NL-to-SQL or the SQL Explorer to exist first. It has no dependency on
+DuckDB or the still-unbuilt SQL validation layer; it's fully self-contained
+(its own tables, its own deterministic engine, reuses the existing Groq
+client only for the explanation step). Building it first didn't block or
+complicate anything the original order assumed — see
+`docs/V2_FEATURES.md`'s updated priority table for the full reconciliation.
 
 ### 6. Which features should wait?
 
@@ -186,6 +205,211 @@ Stated plainly, matching `docs/BUGS.md` / `docs/STORAGE.md` /
   dataset."
 - **DuckDB is inert** — a real, if narrow, gap between what the dependency
   list implies and what the app does.
+
+---
+
+## AI Anomaly Monitoring / Data Pulse
+
+**Status: implemented** (on this branch — see `app/monitoring/`,
+`app/models/monitor.py`, `app/services/monitor_service.py`,
+`app/api/v1/monitors.py`, `frontend/src/pages/monitors-page.tsx` /
+`monitor-detail-page.tsx`, and 44 new backend tests). Not merged to `main`,
+not deployed. Everything below describes what was actually built, not a
+proposal.
+
+### Product purpose
+
+Every other PulseIQ capability — the query builder, the AI Analyst, saved
+Insights — is reactive: the system only ever responds to a question the
+user explicitly asks. This feature changes that for one specific
+capability: a user can tell PulseIQ *which metric matters*, and PulseIQ
+watches it and speaks up when something changes, without being asked. This
+is the "system watches your data and tells you when something important
+happens" distinction, and it's the one place in V2 so far where PulseIQ
+does something proactively rather than on request.
+
+### Core workflow (as built)
+
+```
+Dataset (already uploaded + profiled, same as any V1 dataset)
+    |
+    v
+Monitor configuration (metric column, aggregation, time column,
+                        baseline strategy, threshold/sensitivity,
+                        check frequency, email on/off)
+    |
+    v
+Baseline calculation (per-period series built from the dataset,
+                       via app.monitoring.detection.build_metric_series)
+    |
+    v
+Deterministic anomaly detection (percentage-change / moving-average /
+                                  z-score — never the LLM's decision)
+    |
+    v
+Anomaly classification (direction + severity, computed, not guessed)
+    |
+    v
+Business explanation (Groq, optional, best-effort — see below)
+    |
+    v
+Alert
+    +-- In-app (the Anomaly row itself, listed on the monitor's detail page)
+    +-- Alert history (every Anomaly row, queryable via GET /monitors/anomalies)
+    +-- Email (stdlib smtplib, optional per-monitor, best-effort)
+```
+
+### The architectural principle this was built around
+
+**The LLM never decides whether something is anomalous.** That decision
+happens entirely in `app/monitoring/detection.py` — a module with no
+import of `app.ai` anywhere in it, tested with 26 standalone unit tests
+that never touch the AI layer at all. The AI (`app/ai/anomaly_explainer.py`)
+is only ever called *after* a deterministic result already exists, and its
+only job is to phrase that already-decided result in plain business
+language. This mirrors — and reuses the same reasoning as — this roadmap's
+Natural Language to SQL section: the risky/subjective decision stays in
+code that can be unit-tested and reasoned about; the LLM is confined to
+the one thing it's actually good at (language), never given the authority
+to decide (statistics).
+
+### MVP detection methods (all implemented, all tested)
+
+| Method | What it does | Good for |
+|---|---|---|
+| `previous_period` (percentage change) | Compares the latest period directly against the one immediately before it | Simple day-over-day/period-over-period swings |
+| `moving_average` | Compares the latest period against the mean of the `baseline_window` periods before it | Smoother, less noisy baselines than a single previous period |
+| `zscore` | Compares the latest period's distance from its history's mean, in standard deviations | Metrics with natural variance, where "far from normal" matters more than a fixed % |
+
+Deliberately **not** implemented (by design, not oversight): multi-metric
+correlation detection ("traffic up while conversion down" as its own
+detection method) — each Monitor watches exactly one metric. The AI
+explanation step can *describe* an interesting-sounding relationship if
+the human already knows to look for one, but there's no engine that
+automatically cross-references two monitors' results against each other
+yet. This is exactly the kind of "sounds impressive, adds real complexity"
+feature this roadmap's scope guidance calls out — a clearly named future
+enhancement, not a gap that was missed.
+
+### Monitor configuration (as actually built)
+
+The real schema (`app/schemas/monitor.py`, `app/models/monitor.py`) —
+smaller than the example in the original ask, because a few fields turned
+out to be unnecessary once the detection engine existed:
+
+```
+Monitor:
+    dataset_id, metric_column, aggregation, time_column
+    baseline_strategy   ("previous_period" | "moving_average" | "zscore")
+    baseline_window     (periods of history for moving_average/zscore)
+    threshold_percent   (for previous_period/moving_average)
+    zscore_threshold    (for zscore)
+    check_frequency     ("manual" | "daily" | "hourly")
+    notify_email        (bool)
+    is_enabled          (bool)
+    last_checked_at, last_status, last_error   (current health, always
+                                                 up to date even when no
+                                                 anomaly occurred)
+```
+
+No separate "alert destination" field beyond `notify_email` — in-app
+history is unconditional (every detected anomaly is always visible via the
+API/UI), so the only real on/off switch needed is for the optional email
+channel.
+
+### Anomaly record (as actually built)
+
+```
+Anomaly:
+    monitor_id, owner_id, dataset_id   (owner_id/dataset_id denormalized
+                                        onto the row, same convention as
+                                        V1's DashboardChart)
+    metric_column, period_label        (which period was flagged)
+    observed_value, baseline_value, change_percent, direction
+    detection_method, severity
+    explanation                        (nullable — AI best-effort)
+    alert_sent, alert_sent_at, alert_error   (nullable — email best-effort)
+```
+
+Only actual `ANOMALY_DETECTED` outcomes get a row here — a routine
+`NO_ANOMALY`/`INSUFFICIENT_DATA`/`ERROR` check only updates the Monitor's
+own `last_status`/`last_checked_at`. This keeps the anomaly history genuinely
+a history of events that mattered, not a log of every check.
+
+**Duplicate handling**: re-running a monitor against unchanged data (the
+same latest period) returns the existing Anomaly row instead of creating a
+second one or re-sending the alert — checked directly in
+`tests/test_monitors.py::test_running_monitor_twice_does_not_duplicate_anomaly_or_alert`.
+
+### Alerting (as actually built)
+
+- **In-app / history**: `GET /monitors/anomalies` (optionally filtered by
+  `monitor_id`), rendered on the Monitors and Monitor Detail pages.
+- **Email**: stdlib `smtplib` only — **no new dependency**. Disabled by
+  default (`SMTP_HOST` unset); when unset, an anomaly is still fully
+  detected and persisted, only the email step is skipped, recorded as
+  `alert_error` on that anomaly rather than treated as a failure of the
+  feature. A real email failure (bad credentials, network error) is caught
+  the same way — the anomaly is never rolled back, only its alert fields
+  reflect what happened
+  (`tests/test_monitors.py::test_email_failure_does_not_corrupt_anomaly_record`).
+  The email body is generated dynamically from the real detected values
+  (metric, observed/baseline, change %, severity, the AI explanation if one
+  exists, timestamp) — not a hardcoded template string.
+
+### AI explanation (as actually built)
+
+Reuses the existing Groq client (`app.ai.groq_client`) — no new provider,
+model, or service. `app/ai/anomaly_explainer.py` receives a structured
+dict (metric, observed/baseline values, change %, direction, severity —
+never raw dataset rows) and returns 2-4 sentences of plain business
+language. Gated by the same `AI_PROVIDER` setting V1's AI Analyst already
+uses, so there's one on/off switch for AI features, not two. An AI failure
+(provider down, empty response) is caught and simply leaves `explanation`
+null — tested directly
+(`tests/test_monitors.py::test_ai_explanation_failure_does_not_block_detection`).
+
+### Security (as actually built)
+
+Every Monitor and Anomaly is owner-scoped exactly like every existing V1
+entity — `MonitorService` re-verifies dataset ownership at creation time
+(a client-supplied `dataset_id` is never trusted), and every read/update/
+delete/run goes through the same `get_owned(id, owner_id)` pattern already
+established for datasets, insights, and dashboards. No second auth system
+was introduced. Covered directly by dedicated authorization tests
+(unauthorized dataset, unauthorized monitor access, unauthorized anomaly
+filtering — `tests/test_monitors.py`).
+
+### Data quality handling (as actually built)
+
+`app/monitoring/detection.py` returns one of exactly four statuses —
+`NO_ANOMALY`, `ANOMALY_DETECTED`, `INSUFFICIENT_DATA`, `ERROR` — and never
+raises out of its top-level `detect()` entrypoint. Unparseable dates,
+non-numeric metric values, empty datasets, and too little history to
+compute a moving average or z-score all resolve to `INSUFFICIENT_DATA`
+with a human-readable reason, not a false anomaly or a crash. All of this
+is unit-tested directly in `tests/test_anomaly_detection.py` (26 tests),
+independent of the API/database layer.
+
+### Scheduling (as actually built — and what's deferred)
+
+PulseIQ has no background-worker process or task queue, and this feature
+doesn't add one. `app/workers/anomaly_runner.py` is a plain CLI entrypoint
+(`python -m app.workers.anomaly_runner`) that evaluates every enabled,
+non-"manual" monitor that's due, using the exact same Docker image already
+built for the backend — no new image, no new runtime.
+
+**What's deferred**: actually wiring this up to run periodically in
+production. Railway supports triggering a service on a cron schedule
+(`deploy.cronSchedule` in its service config) — the natural, smallest
+mechanism, since it needs no new infrastructure, just a second lightweight
+Railway service pointed at the same image with this script as its start
+command. That configuration step was deliberately not performed as part of
+this task — this is planning-and-build work on a feature branch, not a
+production deployment change, and standing project rules require an
+explicit decision (and the account owner's own hands) before touching the
+live Railway project. Until that's set up, `run_due_monitors()` is fully
+built, tested, and callable — it just isn't being called automatically yet.
 
 ---
 

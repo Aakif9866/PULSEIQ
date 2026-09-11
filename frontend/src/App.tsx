@@ -8,6 +8,8 @@ import { DatasetsPage } from '@/pages/datasets-page'
 import { InsightsPage } from '@/pages/insights-page'
 import { LandingPage } from '@/pages/landing-page'
 import { LoginPage } from '@/pages/login-page'
+import { MonitorDetailPage } from '@/pages/monitor-detail-page'
+import { MonitorsPage } from '@/pages/monitors-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { SignupPage } from '@/pages/signup-page'
 import { WorkspaceHomePage } from '@/pages/workspace-home-page'
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="/workspace/dashboards/:dashboardId" element={<DashboardDetailPage />} />
           <Route path="/workspace/ai-analyst" element={<AiAnalystPage />} />
           <Route path="/workspace/insights" element={<InsightsPage />} />
+          <Route path="/workspace/monitors" element={<MonitorsPage />} />
+          <Route path="/workspace/monitors/:monitorId" element={<MonitorDetailPage />} />
           <Route
             path="/workspace/settings"
             element={

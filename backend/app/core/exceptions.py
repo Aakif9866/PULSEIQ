@@ -73,3 +73,11 @@ class DashboardNotFoundError(DomainError):
 
 class ChartNotFoundError(DomainError):
     pass
+
+
+class MonitorNotFoundError(DomainError):
+    pass
+
+
+class AnomalyNotFoundError(DomainError):
+    pass

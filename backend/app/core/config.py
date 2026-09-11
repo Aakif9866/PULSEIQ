@@ -84,6 +84,18 @@ class Settings(BaseSettings):
     QUERY_TIMEOUT_SECONDS: int = 10
     QUERY_ROW_LIMIT: int = 10_000
 
+    # --- Anomaly monitoring / alerting (V2) ---
+    # Email is sent via stdlib smtplib — no new dependency. Unset SMTP_HOST
+    # (the default) means email alerting is simply disabled: an anomaly is
+    # still detected and persisted, only the email step is skipped, with
+    # that recorded on the anomaly rather than treated as a hard failure.
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
+    SMTP_USE_TLS: bool = True
+
     @model_validator(mode="after")
     def _enforce_production_safety(self) -> Self:
         """Refuse to boot with dev-only defaults in production — a

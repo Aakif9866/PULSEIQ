@@ -1,9 +1,13 @@
 # PulseIQ V2 — Database Plan
 
-**Planning only — no migration is created by this document.** Everything
-below is designed against the actual V1 schema (`backend/app/models/`,
+**Mostly planning, with two exceptions.** Everything below is designed
+against the actual V1 schema (`backend/app/models/`,
 `backend/alembic/versions/`), not an idealized rewrite of it. Every existing
-table keeps its current shape; V2 is additive.
+table keeps its current shape; V2 is additive. `Monitor` and `Anomaly`
+(marked **IMPLEMENTED** below) are real, migrated tables
+(`backend/alembic/versions/0006_create_monitors.py`) on the
+`feature/pulseiq-v2-roadmap` branch — not merged to `main`, not deployed.
+Every other entity here remains a proposal only, no migration exists for it.
 
 ## Current V1 schema (for reference)
 
@@ -20,6 +24,52 @@ User
 `User`, `Dataset`, `Insight`, `Dashboard`, `DashboardChart` — five tables,
 five Alembic migrations, all cascade-deleting on their parent. This is the
 foundation every V2 entity below builds on; none of it changes shape.
+
+## Implemented V2 entities
+
+### Monitor — **IMPLEMENTED**
+
+**Purpose**: a user-configured "watch this metric" definition — the input
+to the AI Anomaly Monitoring feature (`docs/V2_ROADMAP.md`).
+
+**Important fields**: `owner_id`, `dataset_id` (both FK, cascade —
+identical convention to every V1 entity); `metric_column`, `aggregation`,
+`time_column`; `baseline_strategy` (`previous_period` / `moving_average` /
+`zscore`), `baseline_window`, `threshold_percent`, `zscore_threshold`;
+`check_frequency` (`manual` / `daily` / `hourly`); `notify_email`,
+`is_enabled`; `last_checked_at`, `last_status`, `last_error` (the
+monitor's current health, always current even when the last check found
+nothing).
+
+**Relationships**: `User` 1-N, `Dataset` 1-N, `Anomaly` 1-N (cascade —
+deleting a monitor removes its anomaly history).
+
+**Difference from the original sketch**: no separate "alert destination"
+field — in-app history is unconditional, so `notify_email` alone is
+sufficient to express the one real optional channel. `baseline_window` is
+a single field reused by both `moving_average` and `zscore`, rather than
+separate fields per strategy, since both need the same "how many periods
+of history" concept.
+
+### Anomaly — **IMPLEMENTED**
+
+**Purpose**: one detected anomaly event. Deliberately **not** one row per
+check — only actual `ANOMALY_DETECTED` outcomes get a row (see
+`docs/V2_ROADMAP.md`'s "Anomaly record" section for the reasoning); a
+routine clean check only updates `Monitor.last_status`.
+
+**Important fields**: `monitor_id` (FK, cascade); `owner_id`, `dataset_id`
+(both denormalized directly onto the row and FK'd with cascade — the same
+pattern `DashboardChart` already uses for `dataset_id`, so every ownership
+check is a single-table filter, never a join through `monitor_id` first);
+`metric_column`, `period_label`; `observed_value`, `baseline_value`,
+`change_percent`, `direction`; `detection_method`, `severity`;
+`explanation` (nullable — AI best-effort); `alert_sent`, `alert_sent_at`,
+`alert_error` (nullable — email best-effort, never blocks this row from
+existing).
+
+**Relationships**: `Monitor` 1-N, and (via denormalized columns) directly
+queryable by `User`/`Dataset` without a join.
 
 ## Proposed V2 entities
 
@@ -139,13 +189,16 @@ User
  |-- Dataset (1-N)
  |     |-- DatasetVersion (1-N)                [Nice to Have, built last]
  |     |-- Insight (1-N)                       [unchanged from V1]
- |     |-- QueryHistory (1-N)                  [new]
- |     |-- SavedQuery (1-N)                    [new]
+ |     |-- QueryHistory (1-N)                  [proposed]
+ |     |-- SavedQuery (1-N)                    [proposed]
+ |     |-- Monitor (1-N)                       [IMPLEMENTED]
  |     +-- DashboardChart (1-N)                [unchanged shape, wider chart_type values]
  |-- Insight (1-N)                             [unchanged from V1]
- |-- QueryHistory (1-N)                        [new]
- |-- SavedQuery (1-N)                          [new]
- +-- Dashboard (1-N)                           [+layout, +filters JSONB]
+ |-- QueryHistory (1-N)                        [proposed]
+ |-- SavedQuery (1-N)                          [proposed]
+ |-- Monitor (1-N)                             [IMPLEMENTED]
+ |     +-- Anomaly (1-N)                       [IMPLEMENTED]
+ +-- Dashboard (1-N)                           [+layout, +filters JSONB, proposed]
        +-- DashboardChart (1-N)
 ```
 

@@ -1,13 +1,91 @@
 # PulseIQ V2 — Implementation Plan
 
-**Planning only — no code in this branch.** Phases are ordered by
-dependency (what needs what) and by how directly each extends V1's existing
-strengths. No time estimates are given, per instruction — "complexity" below
-is relative (Low / Medium / High), not a duration.
+**Mostly planning, with one phase actually built: "Phase 0 — AI Anomaly
+Monitoring / Data Pulse" below is implemented on the
+`feature/pulseiq-v2-roadmap` branch, not merged or deployed.** Every other
+phase remains planning only — no code exists for them in this branch.
+Phases are ordered by dependency (what needs what) and by how directly
+each extends V1's existing strengths. No time estimates are given, per
+instruction — "complexity" below is relative (Low / Medium / High), not a
+duration.
 
 Each phase is designed to be shippable and independently valuable — a
 developer could stop after any phase and V1 plus that phase would be a
 coherent, working application, not a half-finished feature.
+
+---
+
+## Phase 0 — AI Anomaly Monitoring / Data Pulse (built)
+
+**Goal**: let a user watch a metric and be told, without asking, when it
+moves outside its normal range — a deterministic detection engine, an
+optional AI explanation layer, and email/in-app alerting.
+
+**Why it's "Phase 0"**: it was requested and built directly, ahead of the
+originally-reasoned Phase 1/2 order (see `docs/V2_FEATURES.md`'s
+reconciliation). It turned out to have no dependency on the SQL work — a
+deliberate design choice (single-metric, no DuckDB, no shared execution
+path with the AI Analyst) that made it fully independent to build first
+without disturbing the rest of this plan.
+
+**Features actually implemented**: monitor CRUD (dataset/metric/
+aggregation/time-column/baseline-strategy/threshold/frequency/email
+on-off); three deterministic detection methods (`previous_period`,
+`moving_average`, `zscore`); anomaly persistence with duplicate-detection
+dedup; AI-generated business explanations (best-effort, Groq, reusing the
+existing client); email alerting (stdlib `smtplib`, best-effort); a
+CLI scheduler entrypoint; monitor list, monitor detail/anomaly-history,
+and a monitor-creation form on the frontend.
+
+**Files created**:
+- Backend: `app/models/monitor.py`, `app/schemas/monitor.py`,
+  `app/monitoring/detection.py`, `app/repositories/monitor_repository.py`,
+  `app/repositories/anomaly_repository.py`, `app/services/monitor_service.py`,
+  `app/api/v1/monitors.py`, `app/ai/anomaly_explainer.py`, `app/core/email.py`,
+  `app/workers/anomaly_runner.py`,
+  `alembic/versions/0006_create_monitors.py`,
+  `tests/test_anomaly_detection.py`, `tests/test_monitors.py`
+- Frontend: `src/types/monitor.ts`, `src/features/monitors/api.ts`,
+  `src/pages/monitors-page.tsx`, `src/pages/monitor-detail-page.tsx`
+
+**Files modified**: `app/models/__init__.py`, `app/core/exceptions.py`
+(+`MonitorNotFoundError`, `+AnomalyNotFoundError`), `app/core/config.py`
+(+SMTP settings), `app/api/v1/router.py` (+monitors router),
+`frontend/src/App.tsx` (+2 routes), `frontend/src/components/layout/
+workspace-layout.tsx` (+1 nav item), `frontend/src/lib/api-client.ts`
+(+`patch` method — the one true "new dependency-adjacent" change, and it's
+zero new packages, just a missing HTTP verb on the existing client).
+
+**New database requirements**: `monitors` and `anomalies` tables (see
+`docs/V2_DATABASE_PLAN.md`) — fully additive, no existing table's shape
+changed.
+
+**Technical risks (and how they were actually handled)**:
+- *An LLM silently becoming the source of truth for "is this anomalous"* —
+  avoided by construction: `app/monitoring/detection.py` has no import of
+  `app.ai` anywhere, and is tested with 26 standalone unit tests that never
+  invoke the AI layer.
+- *A slow/failing AI or email call corrupting an already-detected anomaly*
+  — both are wrapped in isolated try/except blocks in
+  `MonitorService._persist_anomaly`, verified directly by
+  `test_ai_explanation_failure_does_not_block_detection` and
+  `test_email_failure_does_not_corrupt_anomaly_record`.
+- *Data-quality edge cases producing false anomalies* (missing values, too
+  little history, a zero-baseline division) — each has a dedicated test in
+  `tests/test_anomaly_detection.py`.
+- *A user reaching another user's monitors/anomalies/datasets* — covered
+  by dedicated authorization tests in `tests/test_monitors.py`.
+
+**Testing**: 44 new tests (26 detection-engine unit tests + 18 API/
+integration tests), all passing alongside the full pre-existing 48-test V1
+suite (92 total). Backend `ruff`/`mypy` clean; frontend `oxlint`/`tsc`/
+production build clean.
+
+**Deliberately deferred** (see `docs/V2_ROADMAP.md` for the reasoning):
+multi-metric correlation detection (each Monitor watches one metric only);
+actually scheduling `anomaly_runner.py` to run periodically in production
+(the script is built and tested; wiring a Railway cron-scheduled service
+to call it is a live-deployment change, not performed here).
 
 ---
 
@@ -279,6 +357,9 @@ Medium (if real-credential testing surfaces a gap).
 ## Sequencing summary
 
 ```
+Phase 0 (AI Anomaly Monitoring) -- BUILT; fully independent of every phase below
+        |
+        v
 Phase 1 (SQL generation + validation)
         |
         v
