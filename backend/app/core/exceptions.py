@@ -81,3 +81,7 @@ class MonitorNotFoundError(DomainError):
 
 class AnomalyNotFoundError(DomainError):
     pass
+
+
+class SavedQueryNotFoundError(DomainError):
+    pass

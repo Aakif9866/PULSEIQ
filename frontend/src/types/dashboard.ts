@@ -1,6 +1,6 @@
 import type { DatasetQueryRequest } from '@/types/dataset'
 
-export type ChartType = 'bar' | 'line'
+export type ChartType = 'bar' | 'line' | 'area' | 'pie' | 'scatter' | 'kpi' | 'table'
 
 export interface Dashboard {
   id: string

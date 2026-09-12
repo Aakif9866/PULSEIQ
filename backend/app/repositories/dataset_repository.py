@@ -51,10 +51,16 @@ class DatasetRepository:
         row_count: int,
         column_count: int,
         columns_profile: list[dict[str, Any]],
+        duplicate_row_count: int | None = None,
+        data_quality_score: float | None = None,
+        correlations: list[dict[str, Any]] | None = None,
     ) -> Dataset:
         dataset.row_count = row_count
         dataset.column_count = column_count
         dataset.columns_profile = columns_profile
+        dataset.duplicate_row_count = duplicate_row_count
+        dataset.data_quality_score = data_quality_score
+        dataset.correlations = correlations
         dataset.status = "profiled"
         self._db.add(dataset)
         self._db.commit()

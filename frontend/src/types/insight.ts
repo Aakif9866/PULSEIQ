@@ -1,3 +1,4 @@
+import type { ChartType } from '@/types/dashboard'
 import type { DatasetQueryRequest, DatasetQueryResult } from '@/types/dataset'
 
 export interface AskResponse {
@@ -5,6 +6,9 @@ export interface AskResponse {
   answer: string
   query: DatasetQueryRequest
   result: DatasetQueryResult
+  // Deterministic (backend rules, not AI-decided) — always a suggestion,
+  // never applied without the user being able to change it.
+  suggested_chart_type: ChartType
 }
 
 export interface Insight {

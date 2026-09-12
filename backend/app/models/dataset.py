@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -33,6 +33,12 @@ class Dataset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     column_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     columns_profile: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # Data quality (V2) — dataset-level stats, kept as first-class columns
+    # (not folded into columns_profile) since they describe the whole
+    # dataset, not one column.
+    duplicate_row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    correlations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"Dataset(id={self.id}, original_filename={self.original_filename!r})"

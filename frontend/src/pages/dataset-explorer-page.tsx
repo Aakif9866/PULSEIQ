@@ -132,8 +132,21 @@ export function DatasetExplorerPage() {
         {dataset.status === 'profiled' && (
           <>
             <Card>
-              <CardHeader>
+              <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Columns</CardTitle>
+                {dataset.data_quality_score !== null && (
+                  <div className="flex items-center gap-3 text-xs text-[var(--color-fg-muted)]">
+                    <span>
+                      Quality score{' '}
+                      <span className="font-semibold text-[var(--color-fg)]">
+                        {dataset.data_quality_score}
+                      </span>
+                    </span>
+                    {dataset.duplicate_row_count !== null && dataset.duplicate_row_count > 0 && (
+                      <span>{dataset.duplicate_row_count} duplicate rows</span>
+                    )}
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="overflow-x-auto p-0">
                 <table className="w-full text-left text-sm">
@@ -142,6 +155,7 @@ export function DatasetExplorerPage() {
                       <th className="px-4 py-2 font-medium">Column</th>
                       <th className="px-4 py-2 font-medium">Type</th>
                       <th className="px-4 py-2 font-medium">Nulls</th>
+                      <th className="px-4 py-2 font-medium">Notes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -151,6 +165,15 @@ export function DatasetExplorerPage() {
                         <td className="px-4 py-2 text-[var(--color-fg-muted)]">{column.dtype}</td>
                         <td className="px-4 py-2 text-[var(--color-fg-muted)]">
                           {column.null_count} / {dataset.row_count}
+                          {column.null_percentage > 0 && ` (${column.null_percentage}%)`}
+                        </td>
+                        <td className="px-4 py-2 text-[var(--color-fg-muted)]">
+                          {column.outlier_count !== null && column.outlier_count > 0 && (
+                            <span>{column.outlier_count} outliers</span>
+                          )}
+                          {column.top_values && column.top_values.length > 0 && (
+                            <span>Top: {String(column.top_values[0].value)}</span>
+                          )}
                         </td>
                       </tr>
                     ))}

@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.dataset_query import DatasetQueryRequest
 
-ChartType = Literal["bar", "line"]
+ChartType = Literal["bar", "line", "area", "pie", "scatter", "kpi", "table"]
 
 
 class DashboardCreate(BaseModel):

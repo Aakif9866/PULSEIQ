@@ -12,6 +12,11 @@ interface AddToDashboardControlProps {
   datasetId: string
   query: DatasetQueryRequest
   defaultTitle: string
+  /** A deterministic suggestion (see app.analytics.chart_suggestion on the
+   * backend) — pre-selected here but always changeable, never applied
+   * silently. Defaults to "bar" when the caller has no suggestion (e.g.
+   * a manually-built query in the dataset explorer). */
+  suggestedChartType?: ChartType
 }
 
 const NEW_DASHBOARD = '__new__'
@@ -19,7 +24,12 @@ const NEW_DASHBOARD = '__new__'
 /** Saves the query that produced the caller's current result as a chart on
  * a dashboard — new or existing. Shared by the dataset explorer and the AI
  * analyst, so "add to dashboard" behaves identically from either place. */
-export function AddToDashboardControl({ datasetId, query, defaultTitle }: AddToDashboardControlProps) {
+export function AddToDashboardControl({
+  datasetId,
+  query,
+  defaultTitle,
+  suggestedChartType,
+}: AddToDashboardControlProps) {
   const { data: dashboards } = useDashboards()
   const createDashboard = useCreateDashboard()
   const addChart = useAddChart()
@@ -28,7 +38,7 @@ export function AddToDashboardControl({ datasetId, query, defaultTitle }: AddToD
   const [dashboardId, setDashboardId] = useState('')
   const [newDashboardName, setNewDashboardName] = useState('')
   const [title, setTitle] = useState(defaultTitle)
-  const [chartType, setChartType] = useState<ChartType>('bar')
+  const [chartType, setChartType] = useState<ChartType>(suggestedChartType ?? 'bar')
 
   const handleAdd = async () => {
     let targetDashboardId = dashboardId
@@ -83,6 +93,11 @@ export function AddToDashboardControl({ datasetId, query, defaultTitle }: AddToD
         <Select value={chartType} onChange={(e) => setChartType(e.target.value as ChartType)}>
           <option value="bar">Bar</option>
           <option value="line">Line</option>
+          <option value="area">Area</option>
+          <option value="pie">Pie</option>
+          <option value="scatter">Scatter</option>
+          <option value="kpi">KPI number</option>
+          <option value="table">Table</option>
         </Select>
       </div>
       <Button

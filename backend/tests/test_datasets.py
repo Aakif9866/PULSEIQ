@@ -37,6 +37,10 @@ def test_upload_dataset(client):
     # CSV is already "profiled" by the time this response comes back.
     assert body["status"] == "profiled"
     assert body["size_bytes"] == len(csv_bytes)
+    # Data quality (V2) — populated by the same synchronous profiling step.
+    assert body["duplicate_row_count"] == 0
+    assert body["data_quality_score"] == 100.0
+    assert body["columns_profile"][1]["mean"] == 15.0  # "amount" column
 
 
 def test_upload_rejects_unsupported_extension(client):

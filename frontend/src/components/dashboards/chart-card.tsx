@@ -1,4 +1,6 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card'
+import { KpiCard } from '@/components/dashboards/kpi-card'
+import { ResultTable } from '@/components/dashboards/result-table'
 import { useDatasetQueryResult } from '@/features/datasets/api'
 import { buildChartOption } from '@/lib/chart-options'
 import type { DashboardChart } from '@/types/dashboard'
@@ -67,7 +69,9 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
             Couldn't load this chart's data.
           </div>
         )}
-        {result && (
+        {result && chart.chart_type === 'kpi' && <KpiCard label={chart.title} result={result} />}
+        {result && chart.chart_type === 'table' && <ResultTable result={result} />}
+        {result && chart.chart_type !== 'kpi' && chart.chart_type !== 'table' && (
           <ReactECharts
             option={buildChartOption(result, chart.chart_type)}
             style={{ height: 260 }}

@@ -1,7 +1,24 @@
+export interface TopValue {
+  value: unknown
+  count: number
+}
+
 export interface ColumnProfile {
   name: string
   dtype: string
   null_count: number
+  null_percentage: number
+  min: number | null
+  max: number | null
+  mean: number | null
+  outlier_count: number | null
+  top_values: TopValue[] | null
+}
+
+export interface Correlation {
+  column_a: string
+  column_b: string
+  correlation: number
 }
 
 export interface Dataset {
@@ -14,6 +31,9 @@ export interface Dataset {
   row_count: number | null
   column_count: number | null
   columns_profile: ColumnProfile[] | null
+  duplicate_row_count: number | null
+  data_quality_score: number | null
+  correlations: Correlation[] | null
 }
 
 export type AggregationOp = 'sum' | 'avg' | 'min' | 'max' | 'count'

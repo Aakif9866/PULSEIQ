@@ -146,6 +146,7 @@ export function AiAnalystPage() {
                   datasetId={datasetId}
                   query={lastAsk.query}
                   defaultTitle={lastAsk.question}
+                  suggestedChartType={lastAsk.suggested_chart_type}
                 />
               )}
             </CardContent>

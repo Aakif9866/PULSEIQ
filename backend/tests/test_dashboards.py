@@ -183,3 +183,33 @@ def test_cannot_access_another_users_dashboard(client):
 def test_dashboards_require_auth(client):
     resp = client.get("/api/v1/dashboards")
     assert resp.status_code == 401
+
+
+@pytest.mark.parametrize("chart_type", ["bar", "line", "area", "pie", "scatter", "kpi", "table"])
+def test_dashboard_accepts_every_v2_chart_type(client, chart_type):
+    token = _signup_and_token(client, f"charttype-{chart_type}@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+    dashboard_id = client.post(
+        "/api/v1/dashboards", headers=headers, json={"name": "Board"}
+    ).json()["id"]
+
+    payload = _chart_payload(dataset_id)
+    payload["chart_type"] = chart_type
+    resp = client.post(f"/api/v1/dashboards/{dashboard_id}/charts", headers=headers, json=payload)
+    assert resp.status_code == 201
+    assert resp.json()["chart_type"] == chart_type
+
+
+def test_dashboard_rejects_an_unknown_chart_type(client):
+    token = _signup_and_token(client, "badcharttype@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+    dashboard_id = client.post(
+        "/api/v1/dashboards", headers=headers, json={"name": "Board"}
+    ).json()["id"]
+
+    payload = _chart_payload(dataset_id)
+    payload["chart_type"] = "not-a-real-type"
+    resp = client.post(f"/api/v1/dashboards/{dashboard_id}/charts", headers=headers, json=payload)
+    assert resp.status_code == 422

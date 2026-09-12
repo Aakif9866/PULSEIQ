@@ -84,6 +84,9 @@ class DatasetService:
                 row_count=profile.row_count,
                 column_count=profile.column_count,
                 columns_profile=profile.columns,
+                duplicate_row_count=profile.duplicate_row_count,
+                data_quality_score=profile.data_quality_score,
+                correlations=profile.correlations,
             )
             logger.info("dataset_profiled", dataset_id=str(dataset.id), row_count=profile.row_count)
         except UnsupportedFileFormatError as exc:
