@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.dataset_query import DatasetQueryResult
 
-QuerySource = Literal["ai_sql", "sql_explorer", "ai_structured"]
+QuerySource = Literal["ai_sql", "sql_explorer", "ai_structured", "ai_deep_analysis"]
 
 
 class RunSqlRequest(BaseModel):

@@ -42,7 +42,7 @@ class QueryHistory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # full result set, which could be large and is always reproducible by
     # re-running sql_text against the dataset's current state.
     result_meta: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    # "ai_sql" | "sql_explorer" | "ai_structured"
+    # "ai_sql" | "sql_explorer" | "ai_structured" | "ai_deep_analysis"
     source: Mapped[str] = mapped_column(String(32), nullable=False)
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only

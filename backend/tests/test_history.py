@@ -241,3 +241,35 @@ def test_ask_sql_logs_to_history(client, monkeypatch):
     assert len(history) == 1
     assert history[0]["source"] == "ai_sql"
     assert history[0]["sql_text"] is not None
+
+
+def test_analyze_logs_to_history_and_history_lists_it(client, monkeypatch):
+    # Regression test: DeepAnalysisService logs with source="ai_deep_analysis",
+    # which used to be missing from QueryHistoryRead's QuerySource Literal —
+    # GET /history 500'd the moment anyone had ever used the AI Analyst.
+    from app.schemas.analysis import AnalyzeResponse
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis",
+        lambda df, provider, question, conversation_history=None: AnalyzeResponse(
+            question=question, answer="ok", status="ok"
+        ),
+    )
+
+    headers = {"Authorization": f"Bearer {_signup_and_token(client, 'analyzelog@pulseiq.dev')}"}
+    dataset_id = _upload_sales(client, headers)
+
+    resp = client.post(
+        f"/api/v1/datasets/{dataset_id}/analyze",
+        headers=headers,
+        json={"question": "Give me a complete executive analysis."},
+    )
+    assert resp.status_code == 200
+
+    history = client.get("/api/v1/history", headers=headers)
+    assert history.status_code == 200
+    body = history.json()
+    assert len(body) == 1
+    assert body[0]["source"] == "ai_deep_analysis"
+    assert body[0]["question"] == "Give me a complete executive analysis."
