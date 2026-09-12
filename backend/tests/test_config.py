@@ -24,5 +24,12 @@ def test_development_allows_the_default_secret_key(monkeypatch):
     # pydantic-settings would otherwise read ahead of the class default,
     # since env vars outrank it for any field not passed explicitly here.
     monkeypatch.delenv("SECRET_KEY", raising=False)
-    settings = Settings(ENVIRONMENT="development")
+    # Also isolate from the repo-root .env file itself — it has its own
+    # real SECRET_KEY for local dev, which pydantic-settings reads ahead
+    # of the class default too (env file outranks the default, same as an
+    # OS env var). _env_file=None skips it for this one instance only,
+    # matching this test's actual intent: "what's the default with
+    # nothing set anywhere," not "whatever this developer's .env happens
+    # to contain."
+    settings = Settings(ENVIRONMENT="development", _env_file=None)
     assert settings.SECRET_KEY == "insecure-dev-secret-change-me"

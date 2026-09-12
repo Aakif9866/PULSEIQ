@@ -5,6 +5,7 @@ the repo root). Nothing here should ever contain a real secret — defaults are
 safe-for-local-dev placeholders only.
 """
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import Field, field_validator, model_validator
@@ -12,10 +13,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _INSECURE_DEFAULT_SECRET_KEY = "insecure-dev-secret-change-me"
 
+# pydantic-settings resolves a relative env_file against the process's
+# *current working directory*, not this file's location — a plain ".env"
+# here silently found nothing (and fell back to every class default, with
+# no warning) whenever the app/alembic/pytest was launched from backend/
+# instead of the repo root, which is exactly the workflow README.md itself
+# documents ("cd backend && uvicorn ...", "cd backend && pytest"). Anchoring
+# to this file's real location makes the repo-root .env get found
+# regardless of the caller's cwd.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_REPO_ROOT / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
