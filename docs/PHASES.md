@@ -174,6 +174,135 @@ still needs a target (see below).
   against a guess would likely be thrown away. Pick a target, then this
   reopens.
 
+## Phase 7 — V2: Hybrid AI Analyst, History & Data Quality (built, feature branch)
+
+Built on `feature/pulseiq-v2-roadmap`, not merged to `main`/deployed. Full
+detail: [V2_ROADMAP.md](V2_ROADMAP.md), [AI_ANALYTICS.md](AI_ANALYTICS.md).
+
+- [x] Hybrid AI Analyst engine (`app/ai/analyst_engine.py`) — a tool-calling
+      loop over 16 deterministic tools (dataset profile, column stats,
+      missing values, duplicates, outlier detection, logical-violation
+      rules, correlation, time series, group/filter/formula validation,
+      top/bottom records); every number in an answer traces back to a real
+      tool call, never an LLM guess. `POST /datasets/{id}/analyze`.
+- [x] Answer validator (`app/ai/answer_validator.py`) — cross-checks every
+      finding's numbers against actual tool-call evidence before marking it
+      verified; downgrades confidence and flags (never silently drops) a
+      finding that can't be matched to real evidence.
+- [x] Provider reliability layer (`app/ai/providers/groq_provider.py`) —
+      retry/backoff on empty responses, and a salvage path for a
+      live-discovered Groq quirk (model calls a fake `"json"` tool to
+      express its final answer while `tools=` is still attached).
+- [x] Query history & saved queries (`query_history`/`saved_queries`
+      tables, migration `0007`) — every AI-answered or SQL-Explorer query
+      logged; explicit named saves kept separate from the automatic log.
+- [x] Natural Language to SQL (`app/ai/sql_generator.py`,
+      `app/analytics/sql_engine.py`, `sql_validator.py`) — DuckDB execution
+      behind a dedicated SQL validation layer (statement/table/column
+      allow-list, forced row limit). `POST /datasets/{id}/ask-sql`.
+- [x] SQL Explorer (`POST /datasets/{id}/sql`) — same validate/execute
+      pipeline as NL-to-SQL, direct text-editor entry point; schema-derived
+      suggested queries (no model call).
+- [x] Dataset quality columns and richer profiling (migration `0008`,
+      `app/analytics/data_profile.py`) — column kind inference, quantiles,
+      duplicate-key detection, temporal spans, pairwise correlations,
+      data-quality score.
+- [x] Chart-type suggestion (`app/analytics/chart_suggestion.py`) — rule-
+      based, not a model call.
+- [x] 225 backend tests passing (ruff/mypy clean) covering all of the
+      above, including a fake-in-process-provider engine test and a live
+      Groq end-to-end run against all 16 tools.
+- [x] `GET /history` 500 bug fixed — logging an `/analyze` call used a
+      `source` value (`"ai_deep_analysis"`) the read schema's `Literal`
+      didn't list yet; regression-tested.
+- [ ] **Not yet done: none of this is wired into the frontend.** The "AI
+      Analysis" page still calls the old, unvalidated `/ask` endpoint
+      (`AnalystService.ask()` — one LLM call picks a query, one LLM call
+      free-writes prose over the raw rows, no tool calls, no validation).
+      This is the first item of Phase 8 below.
+
+**Exit criteria:** met on the backend (a user can drive every feature above
+through the real HTTP API with grounded, validated answers); not yet met
+end-to-end through the UI.
+
+## Phase 8 — V2 Completion & Portfolio Readiness (planned, not started)
+
+Captured 2026-09-25 as a concrete, ordered plan for finishing Phase 7 and
+taking it to a deployable, interview-defensible state. Nothing in this
+phase has been built yet — recorded here so scope and ordering survive
+between sessions. Ground rules for executing it (apply to every step
+below): don't rewrite working systems, only extend them; run
+pytest/ruff/mypy/`npm run typecheck`/`npm run lint` after each step and fix
+failures before moving on; update this file and PROGRESS.md (and any other
+affected doc) as part of each step's commit; one clean commit per step;
+stop and ask before any breaking change, migration, new paid service, or
+endpoint removal; never invent a metric — every number in docs or a resume
+bullet must come from something actually measured; add a section to
+`docs/LEARNING.md` per step (what was built, why this approach over the
+alternatives, 3 interview questions to be ready for).
+
+- [ ] **Step 1 — Wire `/analyze` into the frontend.** Switch the AI
+      Analysis page from `/ask` to `/analyze`; surface the evidence behind
+      each answer (which tools ran, key numbers, the validator's verdict)
+      and a clear state when validation fails. Keep `/ask` behind a
+      feature flag, marked deprecated in docs — ask before deleting it.
+      Add frontend + end-to-end tests, including validator-failure and
+      tool-error cases.
+- [ ] **Step 2 — NL-to-SQL safety audit.** Verify read-only execution,
+      SELECT-only statement allow-list, scoping to the user's own dataset,
+      row limit, query timeout, and rejection of multi-statement/injection
+      attempts; fix any gap found; add a test per guarantee; document the
+      model in `docs/SECURITY.md`.
+- [ ] **Step 3 — Evaluation harness.** `evals/` with 50+ questions across
+      2-3 sample datasets, each with a ground-truth answer computed
+      directly (Polars/SQL, never the LLM), covering all 16 tools,
+      NL-to-SQL, and multi-step questions. Runner reports accuracy,
+      validator catch rate, tool-selection accuracy, average latency and
+      tokens/question; compares `/ask` vs `/analyze` where possible.
+      Results recorded in `docs/EVALS.md`.
+- [ ] **Step 4 — LLM rate limits and cost.** Audit what already exists
+      first, add only what's missing: schema/dtype/null-stats/sample-rows/
+      tool-output only ever sent to the LLM, never raw full data; answer
+      caching keyed by (dataset version, normalized question); a small/fast
+      model for routing and explanations, a larger one only where needed;
+      429 handling via exponential backoff + jitter plus a configurable
+      fallback provider behind the existing provider abstraction;
+      per-user daily quotas in Postgres with a clear UI message on
+      exceeded; tokens/latency/cost logged per request plus a simple
+      usage/admin page. Tokens-per-question measured before vs. after,
+      recorded in `docs/AI_ANALYTICS.md`.
+- [ ] **Step 5 — Observability and reliability.** Structured logging with
+      request IDs threaded frontend → backend → tools → LLM; optional
+      tracing (LangSmith or OpenTelemetry) via env vars; tests for max
+      tool-loop iterations reached, provider fallback, quota exceeded,
+      cache hit.
+- [ ] **Step 6 — Ship it.** Switch storage to Cloudflare R2 via the
+      existing `StorageProvider` (per `docs/STORAGE.md`); GitHub Actions CI
+      running lint/typecheck/tests plus a fast eval subset on every PR;
+      deploy backend + frontend (Render or similar) with Neon Postgres,
+      every step documented in `docs/DEPLOYMENT.md` marked verified vs.
+      not; a demo account + sample dataset so a recruiter can try it in
+      under a minute.
+- [ ] **Step 7 — Portfolio packaging.** Rewrite `README.md` — one-line
+      pitch, live demo link, short GIF, Mermaid architecture diagram, eval
+      results table, "key engineering decisions" (deterministic tools +
+      validator over free-form answers, how NL-to-SQL stays safe, how rate
+      limits are handled). New `docs/RESUME.md` — 3-4 bullets for a 1-2 YOE
+      SWE (action verb first, no personal pronouns, acronyms spelled out on
+      first use, only real measured numbers, ~25 words max each), one-line
+      project description, a 30-second interview pitch.
+- [ ] **Optional, ask first:** migrating the tool-calling loop to LangGraph
+      for checkpointing/human-in-the-loop — only propose if it clearly
+      improves reliability or features, with the trade-off explained before
+      touching working code.
+
+**Exit criteria:** `/analyze` is the only AI Analysis path a user reaches
+in the UI (or `/ask` is explicitly, deliberately kept behind a flag), the
+NL-to-SQL safety model is verified and documented, an eval harness with
+recorded results exists, cost/rate-limit handling is in place and measured,
+the app is deployed somewhere a recruiter can reach in under a minute, and
+the README/resume materials are backed entirely by real, measured numbers.
+
 ---
 
 ## Notes

@@ -13,6 +13,8 @@ short — what changed and what's next, not a full diff.
 | 4 — AI Analyst (Groq)               | ✅ Done         |
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
+| 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
+| 8 — V2 Completion & Portfolio Readiness | ⬜ Planned, not started |
 
 ## Known issues
 
@@ -311,5 +313,24 @@ short — what changed and what's next, not a full diff.
   `README.md`'s Option A/B instructions to match.
 - **Next up:** git init/first commit (still nothing committed to
   `master`), a deployment target if/when wanted, or picking up any of the
+
+## 2026-09-25 (Phase 8 plan captured — nothing executed yet)
+
+- No code changed today. Recorded an incoming 7-step plan (plus one
+  optional, ask-first item) as **Phase 8** in
+  [PHASES.md](PHASES.md#phase-8--v2-completion--portfolio-readiness):
+  wire `/analyze` into the frontend (replacing the still-unvalidated
+  `/ask` path the UI currently uses), an NL-to-SQL safety audit, an
+  evaluation harness with ground-truth answers, LLM rate-limit/cost
+  controls, observability, deployment, and portfolio packaging
+  (README rewrite + `docs/RESUME.md`).
+- Also recorded **Phase 7** in PHASES.md for the first time — the hybrid
+  AI Analyst engine, query history, NL-to-SQL, SQL Explorer, and data
+  quality profiling built on `feature/pulseiq-v2-roadmap` in prior
+  sessions (commits `aeeed6a`, `b6553ed`) were never entered into this
+  tracker before now; this just makes the existing state visible here,
+  it doesn't change anything in the code.
+- **Next up:** Phase 8, Step 1 — switch the AI Analysis page from `/ask`
+  to `/analyze` and surface the validator's evidence in the UI.
   genuine limitations logged in BUGS.md (frontend test suite, real R2
   credentials, etc.).
