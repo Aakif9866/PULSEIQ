@@ -243,13 +243,28 @@ export function AnalyzeAnalystView() {
                 {analyze.isPending ? 'Analyzing…' : 'Ask'}
               </Button>
 
-              {analyze.isError && (
-                <p className="text-xs text-[var(--color-negative)]">
-                  {analyze.error instanceof ApiError
-                    ? analyze.error.message
-                    : 'Something went wrong.'}
-                </p>
-              )}
+              {analyze.isError &&
+                (analyze.error instanceof ApiError && analyze.error.status === 429 ? (
+                  <div className="flex items-start gap-2 rounded-md border border-[var(--color-warning)] bg-[var(--color-warning)]/10 px-3 py-2 text-sm text-[var(--color-fg)]">
+                    <AlertTriangle
+                      className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-warning)]"
+                      strokeWidth={1.75}
+                    />
+                    <p>
+                      {analyze.error.message}{' '}
+                      <Link to="/workspace/usage" className="underline">
+                        See your usage
+                      </Link>
+                      . Questions you've already asked today are still answered from cache.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--color-negative)]">
+                    {analyze.error instanceof ApiError
+                      ? analyze.error.message
+                      : 'Something went wrong.'}
+                  </p>
+                ))}
             </form>
           </CardContent>
         </Card>

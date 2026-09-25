@@ -90,6 +90,19 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str | None = None
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     AI_REQUEST_TIMEOUT_SECONDS: int = 30
+    # USD per 1,000,000 tokens, for the model above — deliberately no
+    # default. Groq's current pricing (their pricing page renders
+    # client-side; wasn't fetchable to hardcode a verified number here)
+    # changes and varies by model, so cost is only ever computed when an
+    # operator sets both of these from Groq's own current numbers; left
+    # unset, cost is honestly reported as unavailable rather than an
+    # invented figure. See app/ai/providers/usage_tracking.py.
+    GROQ_INPUT_COST_PER_1M_TOKENS: float | None = None
+    GROQ_OUTPUT_COST_PER_1M_TOKENS: float | None = None
+    # Per-user token budget per UTC calendar day, across AI requests.
+    # None (the default) = no quota enforced, only usage recorded — opt-in,
+    # so an existing deployment's behavior doesn't change underneath it.
+    AI_DAILY_TOKEN_QUOTA_PER_USER: int | None = None
 
     # --- Analytics query safety (phase 3/4) ---
     QUERY_TIMEOUT_SECONDS: int = 10

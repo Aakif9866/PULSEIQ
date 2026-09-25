@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import {
   Activity,
   Database,
+  Gauge,
   LayoutDashboard,
   LogOut,
   Radar,
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/workspace/ai-analyst', label: 'AI Analysis', icon: Sparkles },
   { to: '/workspace/insights', label: 'Saved Insights', icon: Activity },
   { to: '/workspace/monitors', label: 'Monitors', icon: Radar },
+  { to: '/workspace/usage', label: 'Usage', icon: Gauge },
   { to: '/workspace/settings', label: 'Settings', icon: Settings },
 ]
 

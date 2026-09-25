@@ -194,6 +194,27 @@ describe('AnalyzeAnalystView', () => {
     expect(await screen.findByText('AI features are not configured.')).toBeInTheDocument()
   })
 
+  it('shows a distinct quota message with a link to usage on a 429', async () => {
+    const { ApiError } = await vi.importActual<typeof import('@/lib/api-client')>(
+      '@/lib/api-client',
+    )
+    vi.mocked(apiClient.post).mockRejectedValue(
+      new ApiError(
+        429,
+        'Daily AI usage limit reached (2,500 of 2,000 tokens). Resets at 2026-09-26T00:00:00+00:00.',
+      ),
+    )
+
+    renderWithProviders()
+    await askQuestion('Anything?')
+
+    expect(await screen.findByText(/Daily AI usage limit reached/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'See your usage' })).toHaveAttribute(
+      'href',
+      '/workspace/usage',
+    )
+  })
+
   it('sends conversation history from a prior answer on the next question', async () => {
     const first: AnalyzeResponse = {
       question: 'Which category is best?',

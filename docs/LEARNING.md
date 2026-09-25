@@ -306,3 +306,96 @@ interview than a marginally smarter but opaque grader would.
    `docs/EVALS.md` results at the time of the interview — this is the
    one question on this list whose answer must come from that file, not
    from memory of what was expected going in.
+
+---
+
+## Step 4 — LLM rate limits and cost
+
+### What was built
+
+An audit first, then only what was missing. The audit found the model
+already never saw raw data, and found one false claim in the docs: that
+429s were retried with backoff, when every retry actually fired
+instantly. Added: capped, jittered retry backoff that honors Groq's own
+suggested wait; an answer cache keyed by dataset and normalized
+question; per-request token/latency/cost tracking via a provider
+wrapper; a new `ai_usage_log` table (migration 0009) behind opt-in
+per-user daily token quotas and a Usage page; and a fallback-provider
+mechanism that's tested but deliberately not wired in, because no
+second real provider exists.
+
+### Why this approach over the alternatives
+
+**Capping the retry delay instead of honoring Groq's suggested wait.**
+Groq's error named waits up to 18m50s when its daily cap was hit. The
+"polite" option is to sleep exactly that long. It was rejected because
+this code runs inside a live HTTP request: a user would stare at a
+spinner for 18 minutes and then probably hit a gateway timeout anyway.
+The delay honors Groq's hint for short waits and caps at 8 seconds, so
+a long outage fails fast with a clear error. Long outages are what a
+fallback provider is for, not a longer sleep.
+
+**Full jitter over fixed exponential backoff.** With fixed backoff,
+several requests that hit the same 429 at the same moment all retry at
+the same moment too, and collide again. Randomizing the whole delay
+(`uniform(0, cap)`) spreads them out.
+
+**Wrapping the provider for token tracking instead of changing
+`run_analysis`.** Tokens are spread across several `.chat()` calls in
+the tool loop, and nothing returned the total. Adding a field to
+`AnalyzeResponse` would have changed the public API for an internal
+concern. A decorator implementing the same `AIProvider` interface
+collects the totals transparently. It's the pattern the eval harness
+had already proven in Step 3, promoted to production code.
+
+**No hardcoded price.** Groq's pricing page wasn't fetchable, and
+prices change. A made-up constant would make every cost figure in the
+app look authoritative while being wrong. Cost is computed only from
+operator-supplied rates and otherwise shown as "Not tracked", never
+$0.00.
+
+**`dataset_id` as the cache's "dataset version".** The plan said to key
+by dataset version. This app has no versioning because a re-upload
+always creates a new id, so a dataset's content can't change under its
+id. Adding a version column would track something that can't vary.
+
+**UTC-midnight quota reset over a rolling 24-hour window.** A rolling
+window is slightly fairer but has no reset time you can tell a user;
+it depends on when their oldest request in the window happened. A fixed
+reset can be printed in the error message and on the Usage page.
+
+**`ON DELETE SET NULL`, not `CASCADE`, on the usage log's dataset.**
+Every other dataset-linked table cascades. This one doesn't, on
+purpose: cascading would let a user delete a dataset and re-upload it
+to wipe the day's spend. A test covers exactly that.
+
+**Not building model tiering.** The plan suggested a small model for
+routing and a larger one where needed. In a single tool-calling
+conversation, the routing decision and the answer share one context;
+splitting them means sending that context twice. Without eval data
+showing it saves tokens, it would be complexity with an unknown sign.
+
+### Interview questions to be ready for
+
+1. **"Your retry logic ignores the provider's own Retry-After when it's
+   long. Isn't that impolite to the API?"** Be ready to separate two
+   actors: the retry loop protects a live user request, and one that
+   can't wait 18 minutes. It doesn't hammer the API either — it gives
+   up. Name what would handle long outages properly (a fallback
+   provider, or a background queue that can afford to wait), and why
+   neither belongs inside a synchronous request.
+2. **"How do you know a cache hit is correct and not a stale or wrong
+   answer?"** Walk through the key (dataset_id + normalized question),
+   why dataset_id is enough in this app (content is immutable per id),
+   why follow-up questions are never cached, and why degraded answers
+   aren't. Be ready to name the limitation: in-process, so it's lost on
+   restart and not shared across workers — a miss, never a wrong
+   answer.
+3. **"A user is over quota. Walk me through exactly what happens on
+   each endpoint, including the ones that don't count tokens."** The
+   cache is checked first (free, so still served). Then the quota is
+   checked, and a 429 names the usage and the reset time. `/ask` and
+   `/ask-sql` are blocked too so the limit can't be dodged, but they
+   don't add their own tokens yet. Be honest that this is a known
+   under-count, and say how you'd fix it: route them through the
+   provider abstraction.

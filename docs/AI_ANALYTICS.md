@@ -169,16 +169,106 @@ rejection) is being audited and documented in `docs/SECURITY.md` as
 `docs/PHASES.md` Phase 8 step 2 — treat this section as provisional
 until that lands.**
 
+## Rate limits, caching, and cost (Phase 8 step 4)
+
+The step's own instruction was to check what already existed before
+adding anything. Findings, in both directions:
+
+**Already existed, left alone:**
+- **The model never sees raw full data.** Audited, not assumed:
+  `/analyze`'s system prompt carries only column names and dtypes
+  (`analyst_engine._column_overview`) — *less* than the plan's own
+  description assumed (no null stats or sample rows up front). Anything
+  more, the model has to fetch through a tool, and every tool result is
+  truncated to 4,000 characters (`_MAX_TOOL_RESULT_CHARS`) before it
+  goes back to the model. Conversation history is capped at 5 turns and
+  the tool loop at 6 iterations — all pre-existing cost bounds.
+
+**Didn't exist, added:**
+- **Retry backoff with jitter** (`app/ai/providers/groq_provider.py`).
+  This doc previously claimed 429s were "handled with retry/backoff" —
+  **that was wrong**: every retry fired instantly, replaying the same
+  request into the same limit. Found live during the Phase 8 step 3 eval
+  run. Now: honors Groq's own suggested wait (its `Retry-After` header,
+  or the wait named in its error text, since Groq doesn't always set the
+  header), full jitter, and a hard cap of 8 seconds per retry. The cap
+  matters: the same run hit Groq's *daily* token limit, where Groq
+  suggested waits up to 18m50s — no live HTTP request should hang that
+  long, so the cap makes it fail fast instead. Verified live: a resumed
+  run against the exhausted quota gave up in ~15s per question rather
+  than hanging.
+- **Answer caching** (`app/ai/answer_cache.py`), keyed by
+  `(dataset_id, normalized question)`. `dataset_id` stands in for a
+  dataset version on purpose: this app has no re-upload-in-place, so a
+  dataset's content never changes under its id. Only fresh questions
+  (no conversation history) are cached, since a follow-up's meaning
+  depends on context; only `status: "ok"` answers are cached, so a
+  degraded fallback always gets a real retry. 15-minute TTL,
+  in-process — it doesn't survive a restart or span multiple worker
+  processes (this is a single-process deployment today).
+- **Per-request token/latency/cost logging** — every `/analyze` call
+  logs an `analyze_request_completed` event with Groq's own reported
+  token counts, and writes a row to `ai_usage_log` (migration 0009).
+  Captured by wrapping the provider (`UsageTrackingProvider`) rather
+  than changing `run_analysis` or the `AnalyzeResponse` schema.
+- **Cost is config-driven, not hardcoded.** Groq's pricing page renders
+  client-side and wasn't fetchable to pin a verified number, and this
+  project doesn't present invented figures as real. Cost is computed
+  only when `GROQ_INPUT_COST_PER_1M_TOKENS` and
+  `GROQ_OUTPUT_COST_PER_1M_TOKENS` are set from Groq's current pricing;
+  otherwise it's reported as unknown (`null`, "Not tracked" in the UI),
+  never as $0.00.
+- **Per-user daily token quotas** (`AI_DAILY_TOKEN_QUOTA_PER_USER`,
+  opt-in, unset by default). Resets at UTC midnight (a fixed, explainable
+  time rather than a rolling window). Over the limit: a `429` naming the
+  usage and reset time. Cached answers are still served, since they cost
+  nothing. Deleting a dataset doesn't reset the count
+  (`ai_usage_log.dataset_id` is `ON DELETE SET NULL`), so delete-and-
+  re-upload can't be used to dodge the limit.
+- **A Usage page** (`/workspace/usage`, `GET /usage/me`) showing today's
+  requests, cache hits, tokens, cost (or "Not tracked"), and quota.
+  Per-user only — there's no admin role in this app, so an all-users
+  admin view would need one first.
+- **A fallback-provider mechanism** (`app/ai/providers/fallback.py`) —
+  built and tested, **not wired into production**. This codebase has one
+  real provider (Groq); a fallback to the same provider does nothing, and
+  adding a second one (OpenAI, Gemini, ...) is a new paid account, which
+  this project asks about before adding.
+
+**Known gaps, not hidden:**
+- `/ask` (deprecated) and `/ask-sql` call the Groq client directly
+  rather than through `AIProvider`, so they don't report their own token
+  usage. They *are* blocked once a user is over quota, so the limit can't
+  be bypassed by switching endpoints — their spend just isn't counted.
+- No model tiering. The plan suggested a small model for routing and a
+  larger one where needed. `/analyze` makes one routing-style decision
+  per loop iteration inside the same conversation; splitting that across
+  two models would mean a second context and more tokens, not fewer,
+  without measured evidence it helps. Not built; revisit with eval data.
+
+### Measured tokens per question
+
+**Small-sample spot measurements, not a benchmark.** These come from
+real live runs, with token counts read off Groq's own `usage` object.
+The full 51-question run that would give a real before/after comparison
+is blocked on Groq's free-tier daily token cap (`docs/EVALS.md`).
+
+| Question | `/analyze` tokens | LLM calls | `/ask` tokens | Source |
+|---|---|---|---|---|
+| "Give me a full profile of this dataset." | 5,640 | 2 | — (not comparable) | `evals/results/smoke_2026-09-25.json` |
+| "What's the average revenue per order?" | 6,651 | 3 | 1,031 | `evals/results/smoke_2026-09-25.json` |
+| "Are there any duplicate rows in this dataset?" | 3,227 | 2 | 3,890 | single live run, printed to console, not persisted |
+
+n=3 for `/analyze` and n=2 for `/ask` supports no general claim about
+which path costs more — in the third row `/analyze` was cheaper. What
+*is* measurable without the model: **a repeated fresh question now costs
+0 tokens** (served from cache, recorded with `cache_hit=true`) instead of
+a full-price repeat. That's covered by tests
+(`test_analyze_cache_hit_skips_a_second_real_call`,
+`test_a_cache_hit_is_recorded_with_zero_tokens`), not estimated.
+
 ## What isn't built
 
-- **No per-user rate limiting or cost tracking** on AI calls, across any
-  of the three paths above — a user could ask many questions in a row
-  and each hits the real Groq API, uncounted and unbilled. Addressed in
-  `docs/PHASES.md` Phase 8 step 4 (quotas, token/cost logging, a usage
-  page); this section will be updated with real measured numbers once
-  that lands, not projected ones.
-- **No caching** of AI answers — the same question asked twice makes two
-  real Groq calls. Also Phase 8 step 4.
 - **Visualization recommendations aren't AI-driven.** `chart_suggestion.py`
   picks a chart type from the query's shape via a fixed rules table, not
   a model call — deliberate (see `V2_ROADMAP.md`'s "AI Visualization
@@ -187,9 +277,8 @@ until that lands.**
   `/ask`'s did (prompt injection, "narrate a mutation," out-of-scope
   hallucination) — see the note under "Safety controls verified against
   `/ask`" above.
-- **Not tested against a hosted/production Groq rate limit or outage** —
-  a Groq `429`/`5xx` is handled with retry/backoff in
-  `app/ai/providers/groq_provider.py` (verified live — see
-  `docs/PHASES.md` Phase 7's testing notes) and a clean error surfaces to
-  the user; a configurable fallback *provider* (a second AI backend, not
-  just a retry) is planned in Phase 8 step 4, not built yet.
+- **No second AI provider.** The fallback mechanism exists (see above)
+  but has nothing real to fall back to. If Groq is down, or rate-limits
+  the whole account (as its daily token cap did during the Phase 8 step
+  3 eval run), AI features stop cleanly with a clear error; nothing else
+  takes over.

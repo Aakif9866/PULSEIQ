@@ -7,6 +7,7 @@ from app.api.deps import get_current_user, get_storage
 from app.core.database import get_db
 from app.core.exceptions import (
     AiNotConfiguredError,
+    AiQuotaExceededError,
     AiResponseError,
     ColumnNotFoundError,
     DatasetNotFoundError,
@@ -24,6 +25,13 @@ from app.storage import StorageProvider
 router = APIRouter(prefix="/datasets", tags=["analysis"])
 
 
+def _quota_exceeded(exc: AiQuotaExceededError) -> HTTPException:
+    """429, not 403 — the user is allowed to do this, just not again
+    today. The message names the reset time so the UI can say it plainly
+    (docs/PHASES.md Phase 8 step 4: "a clear UI message when exceeded")."""
+    return HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc))
+
+
 @router.post("/{dataset_id}/ask", response_model=AskResponse)
 def ask_dataset(
     dataset_id: uuid.UUID,
@@ -39,6 +47,8 @@ def ask_dataset(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI analyst isn't configured yet.",
         ) from exc
+    except AiQuotaExceededError as exc:
+        raise _quota_exceeded(exc) from exc
     except DatasetNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found"
@@ -89,6 +99,8 @@ def analyze_dataset(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI analyst isn't configured yet.",
         ) from exc
+    except AiQuotaExceededError as exc:
+        raise _quota_exceeded(exc) from exc
     except DatasetNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found"
@@ -122,6 +134,8 @@ def ask_dataset_with_sql(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="The AI analyst isn't configured yet.",
         ) from exc
+    except AiQuotaExceededError as exc:
+        raise _quota_exceeded(exc) from exc
     except DatasetNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found"

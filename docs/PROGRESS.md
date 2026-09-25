@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1-2 done, Step 3 built/partial |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1, 2, 4 done; Step 3 built, full run pending quota |
 
 ## Known issues
 
@@ -494,3 +494,50 @@ short — what changed and what's next, not a full diff.
   so this may be resumable later today rather than only tomorrow. Once
   it completes, fill in `docs/EVALS.md`'s results table with the real
   numbers and mark Phase 8 step 3 fully done. Then step 4.
+
+## 2026-09-25 (evening — eval resume attempt; Phase 8, Step 4 done)
+
+- **Eval resume attempt:** waited 20 minutes and resumed with `--resume`.
+  Groq's daily cap had barely recovered (~2,100 tokens freed in ~27
+  minutes), and every remaining question failed with a 429 — 0/51
+  succeeded in that run. The new backoff cap worked as intended: each
+  question gave up in ~15s instead of hanging for the 7-18 minutes Groq
+  suggested. That results file held only quota failures, so it was
+  deleted rather than kept where it could be mistaken for eval data. The
+  full run is deferred until the daily quota resets.
+- **Resource-ownership check** (asked for before the migration): the
+  GitHub remote is the personal `github-personal:Aakif9866` alias, the
+  account email is a personal Gmail matching that handle, the Neon
+  project uses Neon's auto-generated defaults with no company branding,
+  R2 isn't configured at all, and nothing points to an employer's
+  account. Dashboards themselves weren't checked (no login access). **A
+  mistake in the process:** a redaction command assumed the wrong URL
+  scheme and printed the Neon database password to the session output.
+  Flagged immediately; the password should be rotated.
+- **Step 4 audit first, as the plan asked:** the model already never saw
+  raw data — only column names/dtypes up front, tool results truncated
+  at 4,000 chars, history capped at 5 turns, the loop at 6 iterations.
+  Found one wrong claim in `docs/AI_ANALYTICS.md`: it said 429s were
+  "handled with retry/backoff". They weren't — retries fired instantly.
+- **Added:** backoff with full jitter honoring Groq's own suggested wait
+  (Retry-After header, or its error text when the header's missing),
+  capped at 8s; an in-process answer cache keyed by (dataset_id,
+  normalized question), fresh questions and "ok" answers only; a
+  `UsageTrackingProvider` wrapper that totals Groq-reported tokens and
+  latency across the tool loop without touching `run_analysis` or the
+  response schema; config-driven cost (unset = "Not tracked", never
+  $0.00); migration 0009 (`ai_usage_log`, verified upgrade → downgrade →
+  upgrade on a throwaway database); opt-in per-user daily token quotas
+  (UTC midnight reset, 429 with the reset time, cached answers still
+  served, delete-and-re-upload can't reset it); `GET /usage/me` and a
+  Usage page; a `FallbackProvider` mechanism, tested but not wired (no
+  second real provider exists).
+- **Not done, stated in the docs:** model tiering, token counting for
+  `/ask`/`/ask-sql` (they bypass the provider abstraction but are still
+  quota-blocked), an all-users admin view (no admin role), and a real
+  before/after token measurement (blocked on the quota — the n=3 spot
+  measurements that exist are recorded in `AI_ANALYTICS.md`, labeled
+  as a spot check).
+- **Tests:** 42 new backend tests (292/292), 7 new frontend tests
+  (19/19); ruff, mypy, typecheck, lint, and build all clean.
+- **Next up:** Phase 8, Step 5 — observability and reliability.

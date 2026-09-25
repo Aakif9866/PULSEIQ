@@ -1,0 +1,79 @@
+{
+  "summary": {
+    "total_questions": 2,
+    "analyze_succeeded": 2,
+    "analyze_failed": 0,
+    "analyze_value_accuracy_pct": 100.0,
+    "analyze_tool_selection_accuracy_pct": 100.0,
+    "validator_flagged_pct_of_findings": 0.0,
+    "findings_total": 6,
+    "findings_unverified": 0,
+    "avg_latency_ms": 17955,
+    "avg_tokens_per_question": 6146,
+    "avg_tool_calls_per_question": 2.5,
+    "ask_vs_analyze_comparable_questions": 1,
+    "ask_value_accuracy_pct": 100.0,
+    "analyze_value_accuracy_on_comparable_subset_pct": 100.0,
+    "ask_avg_tokens": 1031,
+    "analyze_avg_tokens_on_comparable_subset": 6651
+  },
+  "results": [
+    {
+      "id": "ecom-profile-1",
+      "dataset": "ecommerce",
+      "question": "Give me a full profile of this dataset.",
+      "category": "get_dataset_profile",
+      "expected_value": 120,
+      "value_description": "row count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset contains 120 rows across 11 columns. No column is completely missing, but the region field has 6 missing entries (5% of rows). There are 4 duplicate rows, representing about 3.33% of the data. Statistical outlier detection flags 6 revenue records (5% of rows) as extreme values, while only one outlier each appears in units and unit_price. The strongest relationship is between units and revenue, with a Pearson correlation of 0.989, suggesting revenue is driven almost entirely by the number of units sold.",
+        "findings_total": 5,
+        "findings_verified": 5,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3593,
+        "total_tokens": 5640,
+        "call_count": 2,
+        "groq_reported_ms": 2570
+      }
+    },
+    {
+      "id": "ecom-colstats-1",
+      "dataset": "ecommerce",
+      "question": "What's the average revenue per order?",
+      "category": "get_column_statistics",
+      "expected_value": 4964.81,
+      "value_description": "mean revenue",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_column_statistics",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset shows an average revenue of about 4,964.81 per order across the 120 orders. This figure comes directly from the mean of the revenue column.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 32317,
+        "total_tokens": 6651,
+        "call_count": 3,
+        "groq_reported_ms": 1259
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "The average revenue per order is approximately\u202f4,964.81. This figure comes directly from the data you provided.",
+        "latency_ms": 7659,
+        "total_tokens": 1031
+      }
+    }
+  ]
+}

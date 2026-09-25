@@ -191,9 +191,13 @@ origin.
 
 ## Known limitations (not hidden)
 
-- **No rate limiting anywhere** — not on login attempts, not on AI calls,
-  not on uploads. A determined caller could brute-force a password or
-  run up a Groq bill. Would be a prerequisite for any public deployment.
+- **Rate limiting is partial.** AI calls now have an opt-in per-user
+  daily token quota (`AI_DAILY_TOKEN_QUOTA_PER_USER`, Phase 8 step 4 —
+  see `docs/AI_ANALYTICS.md`), enforced on all three AI endpoints so it
+  can't be bypassed by switching between them. **Still nothing on login
+  attempts or uploads** — a determined caller could still brute-force a
+  password. Setting the AI quota, plus login throttling, is a
+  prerequisite for any public deployment.
 - **Refresh tokens are persisted in the frontend's `localStorage`** (via
   Zustand's `persist` middleware), not an `httpOnly` cookie — a
   pragmatic, documented trade-off for this project's current scope, not

@@ -6,8 +6,26 @@ crashing the whole analysis. Every failure path still ends in
 AiResponseError, never a silent blank answer — see
 app/services/analysis_service.py for the user-facing fallback message
 this feeds into.
+
+Retry backoff (docs/PHASES.md Phase 8 step 4): found live, not assumed
+— every retry previously fired with NO delay at all, immediately
+replaying the identical request into the identical rate limit. A real
+429 during the step 3 eval run showed this doing nothing useful; a
+harder one (Groq's *daily* token cap, not just per-minute) made the gap
+obvious — no in-request retry delay, however generous, helps when the
+suggested wait is 18+ minutes. So the fix has two parts, not one: real
+delay-then-retry for the genuinely brief case (jittered, honoring
+Groq's own suggested wait via the response's Retry-After header or its
+error-message text when present), capped low (_MAX_RETRY_DELAY_SECONDS)
+so one slow provider call can never make a single HTTP request hang for
+minutes — and, for waits past what a live request should ever block on,
+that's what a configurable fallback provider is for, not a longer
+sleep. See FallbackProvider below.
 """
 import json
+import random
+import re
+import time
 from typing import Any
 
 from app.ai.providers.base import AIProvider, ProviderMessage, ToolCall
@@ -18,6 +36,47 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 _MAX_RETRIES = 2
+# A real request can't block on Groq's own suggested wait when that's
+# minutes long (observed live: 5s up to 18m50s for the same daily-quota
+# error) — this bounds what an automatic in-request retry will ever
+# actually sleep for, regardless of what Groq suggests. Waits longer
+# than this need a fallback provider or the caller giving up, not a
+# longer sleep here.
+_MAX_RETRY_DELAY_SECONDS = 8.0
+_BASE_BACKOFF_SECONDS = 0.5
+_RETRY_AFTER_TEXT_RE = re.compile(r"try again in (?:(\d+)m)?([\d.]+)s", re.IGNORECASE)
+
+
+def _suggested_retry_delay(exc: Exception) -> float | None:
+    """Reads Groq's own suggested wait, when it tells us one — the
+    standard `Retry-After` response header first, then (Groq doesn't
+    always set that header even though its error *message* always
+    names a wait — verified live) its human-readable error text as a
+    fallback. Returns None, not a guess, when neither is present."""
+    response = getattr(exc, "response", None)
+    header_value = getattr(response, "headers", {}).get("retry-after") if response else None
+    if header_value is not None:
+        try:
+            return float(header_value)
+        except ValueError:
+            pass
+    message = str(exc)
+    match = _RETRY_AFTER_TEXT_RE.search(message)
+    if match:
+        minutes = float(match.group(1)) if match.group(1) else 0.0
+        seconds = float(match.group(2))
+        return minutes * 60 + seconds
+    return None
+
+
+def _retry_delay_seconds(exc: Exception, attempt: int) -> float:
+    suggested = _suggested_retry_delay(exc)
+    base = suggested if suggested is not None else _BASE_BACKOFF_SECONDS * (2**attempt)
+    capped = min(base, _MAX_RETRY_DELAY_SECONDS)
+    # Full jitter (not just +/-): spreads out multiple concurrent
+    # requests that all just hit the same rate limit at once, instead of
+    # every one of them retrying in lockstep at the exact same moment.
+    return random.uniform(0, capped)
 
 
 def _safe_parse_arguments(raw: str) -> dict[str, Any]:
@@ -130,9 +189,13 @@ class GroqProvider(AIProvider):
                 if salvaged is not None:
                     return salvaged
                 last_error = exc
+                delay = _retry_delay_seconds(exc, attempt) if attempt < _MAX_RETRIES else 0.0
                 logger.warning(
-                    "groq_provider_request_failed", attempt=attempt, error=str(exc)
+                    "groq_provider_request_failed",
+                    attempt=attempt, error=str(exc), retry_delay_seconds=round(delay, 2),
                 )
+                if delay:
+                    time.sleep(delay)
                 continue
 
             message = response.choices[0].message

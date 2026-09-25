@@ -16,6 +16,7 @@ from app.schemas.ai import AskResponse, AskSqlResponse
 from app.schemas.dataset_query import DatasetQueryResult
 from app.services.dataset_service import DatasetService
 from app.services.history_service import HistoryService
+from app.services.usage_service import UsageService
 from app.storage.base import StorageProvider
 
 # Bounds SQL execution wall-clock time the same way DatasetService bounds
@@ -29,6 +30,11 @@ class AnalystService:
         self._datasets = DatasetService(db, storage)
         self._storage = storage
         self._history = HistoryService(db, storage)
+        # These two paths don't report token usage yet (see
+        # app/services/usage_service.py), but an over-quota user is still
+        # blocked here — otherwise the quota on /analyze could be bypassed
+        # just by switching endpoints.
+        self._usage = UsageService(db)
 
     def ask(self, dataset_id: uuid.UUID, owner_id: uuid.UUID, question: str) -> AskResponse:
         if settings.AI_PROVIDER != "groq":
@@ -38,6 +44,7 @@ class AnalystService:
         dataset = self._datasets.get_owned(dataset_id, owner_id)
         if dataset.status != "profiled":
             raise DatasetNotReadyError(dataset.status)
+        self._usage.enforce_quota(owner_id)
 
         query = build_query_from_question(question, dataset)
         # Re-checks ownership/status and enforces QUERY_ROW_LIMIT/QUERY_TIMEOUT_SECONDS
@@ -75,6 +82,7 @@ class AnalystService:
         dataset = self._datasets.get_owned(dataset_id, owner_id)
         if dataset.status != "profiled":
             raise DatasetNotReadyError(dataset.status)
+        self._usage.enforce_quota(owner_id)
 
         df = load_dataframe(self._storage, dataset)
         raw_sql = build_sql_from_question(question, dataset, df)

@@ -313,17 +313,28 @@ alternatives, 3 interview questions to be ready for).
       already succeeded. Full numbered results are pending a completed
       run (resuming once quota allows) — `docs/EVALS.md` documents this
       status honestly rather than filling in estimated numbers.
-- [ ] **Step 4 — LLM rate limits and cost.** Audit what already exists
-      first, add only what's missing: schema/dtype/null-stats/sample-rows/
-      tool-output only ever sent to the LLM, never raw full data; answer
-      caching keyed by (dataset version, normalized question); a small/fast
-      model for routing and explanations, a larger one only where needed;
-      429 handling via exponential backoff + jitter plus a configurable
-      fallback provider behind the existing provider abstraction;
-      per-user daily quotas in Postgres with a clear UI message on
-      exceeded; tokens/latency/cost logged per request plus a simple
-      usage/admin page. Tokens-per-question measured before vs. after,
-      recorded in `docs/AI_ANALYTICS.md`.
+- [x] **Step 4 — LLM rate limits and cost** (with stated gaps). Audited
+      first: the model already never saw raw data (only column names/
+      dtypes up front; tool results truncated at 4,000 chars; history and
+      loop already capped). Added: retry backoff with jitter (retries
+      previously fired instantly — this doc's companion
+      `AI_ANALYTICS.md` wrongly claimed otherwise), honoring Groq's
+      suggested wait but capped at 8s so a request never hangs on a
+      daily-quota 429; answer caching by (dataset_id, normalized
+      question); per-request token/latency/cost logging via a
+      provider wrapper; config-driven cost (no hardcoded price — Groq's
+      pricing wasn't fetchable to verify); per-user daily token quotas in
+      Postgres (migration 0009, `ai_usage_log`, approved first) with a
+      clear 429 and UI message; a per-user Usage page; a fallback-
+      provider mechanism (built and tested, not wired — no second real
+      provider exists). **Not done:** model tiering (no evidence it would
+      cut tokens here), token counting for `/ask`/`/ask-sql` (they
+      bypass the provider abstraction; they're still quota-blocked), an
+      all-users admin view (no admin role exists), and a real 51-question
+      before/after token measurement (blocked on Groq's daily cap —
+      `AI_ANALYTICS.md` records the n=3 spot measurements that do exist,
+      labeled as such). 42 new backend tests (292 total), 7 new frontend
+      tests (19 total).
 - [ ] **Step 5 — Observability and reliability.** Structured logging with
       request IDs threaded frontend → backend → tools → LLM; optional
       tracing (LangSmith or OpenTelemetry) via env vars; tests for max

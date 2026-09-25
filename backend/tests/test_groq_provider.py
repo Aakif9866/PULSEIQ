@@ -35,10 +35,15 @@ def _fake_response(
 
 class _BadRequestLike(Exception):
     """Stands in for groq.BadRequestError — GroqProvider only relies on a
-    `.body` attribute being present, never the real SDK exception type."""
+    `.body` attribute being present, and (for retry-delay parsing) on
+    str(exc) containing the message text, never the real SDK exception
+    type. str(exc) here matches the real SDK's actual format, verified
+    against this project's own captured logs: "Error code: 429 -
+    {'error': {'message': 'Rate limit reached ... Please try again in
+    5.0625s...', ...}}" — the body dict's repr, not just a bare code."""
 
     def __init__(self, body: dict[str, Any]) -> None:
-        super().__init__("Error code: 400")
+        super().__init__(f"Error code: 400 - {body}")
         self.body = body
 
 
@@ -171,3 +176,61 @@ def test_chat_does_not_salvage_unrelated_bad_request_errors(monkeypatch):
     _install_fake_client(monkeypatch, [bad_request, bad_request, bad_request])
     with pytest.raises(AiResponseError):
         GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+
+
+# ---- Phase 8 step 4 retry backoff (docs/PROGRESS.md) ----
+# Found live during the step 3 eval run: every retry previously fired
+# instantly, with no delay at all, immediately replaying the identical
+# request into the identical rate limit.
+
+
+def test_retry_actually_sleeps_between_attempts(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.ai.providers.groq_provider.time.sleep", sleeps.append)
+    _install_fake_client(
+        monkeypatch, [_BadRequestLike({"error": {"message": "transient"}}), _fake_response("ok")]
+    )
+    GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert len(sleeps) == 1
+    assert sleeps[0] > 0
+
+
+def test_retry_delay_honors_groqs_own_suggested_wait_from_error_text(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.ai.providers.groq_provider.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.ai.providers.groq_provider.random.uniform", lambda lo, hi: hi)
+    rate_limited = _BadRequestLike(
+        {"error": {"message": "Rate limit reached ... Please try again in 3.5s.", "code": "x"}}
+    )
+    _install_fake_client(monkeypatch, [rate_limited, _fake_response("ok")])
+    GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert sleeps == [pytest.approx(3.5)]
+
+
+def test_retry_delay_is_capped_even_when_groq_suggests_minutes(monkeypatch):
+    # The real, live-observed case: a daily-quota 429 suggesting an
+    # 18-minute wait. A single HTTP request must never actually block
+    # that long — the delay is capped, not honored verbatim.
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.ai.providers.groq_provider.time.sleep", sleeps.append)
+    monkeypatch.setattr("app.ai.providers.groq_provider.random.uniform", lambda lo, hi: hi)
+    from app.ai.providers.groq_provider import _MAX_RETRY_DELAY_SECONDS
+
+    rate_limited = _BadRequestLike(
+        {"error": {"message": "... Please try again in 18m50.112s.", "code": "x"}}
+    )
+    _install_fake_client(monkeypatch, [rate_limited, _fake_response("ok")])
+    GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert sleeps == [pytest.approx(_MAX_RETRY_DELAY_SECONDS)]
+
+
+def test_no_delay_after_the_final_attempt_before_giving_up(monkeypatch):
+    sleeps: list[float] = []
+    monkeypatch.setattr("app.ai.providers.groq_provider.time.sleep", sleeps.append)
+    always_fails = _BadRequestLike({"error": {"message": "persistent"}})
+    _install_fake_client(monkeypatch, [always_fails, always_fails, always_fails])
+    with pytest.raises(AiResponseError):
+        GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    # 3 attempts (_MAX_RETRIES=2 -> 3 total) means 2 delays, not 3 — no
+    # point sleeping after the attempt that's about to give up anyway.
+    assert len(sleeps) == 2

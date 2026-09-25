@@ -12,6 +12,7 @@ import { MonitorDetailPage } from '@/pages/monitor-detail-page'
 import { MonitorsPage } from '@/pages/monitors-page'
 import { PlaceholderPage } from '@/pages/placeholder-page'
 import { SignupPage } from '@/pages/signup-page'
+import { UsagePage } from '@/pages/usage-page'
 import { WorkspaceHomePage } from '@/pages/workspace-home-page'
 import { Settings } from 'lucide-react'
 import { Navigate, Route, Routes } from 'react-router-dom'
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/workspace/insights" element={<InsightsPage />} />
           <Route path="/workspace/monitors" element={<MonitorsPage />} />
           <Route path="/workspace/monitors/:monitorId" element={<MonitorDetailPage />} />
+          <Route path="/workspace/usage" element={<UsagePage />} />
           <Route
             path="/workspace/settings"
             element={

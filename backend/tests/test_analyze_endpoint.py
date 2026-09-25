@@ -4,8 +4,17 @@ these exercise the HTTP/service wiring (auth, ownership, dataset-readiness
 checks, request/response shape) without making a real Groq call, mirroring
 how tests/test_ai_analyst.py mocks analyst_service's collaborators.
 """
+import pytest
+
 from app.core.config import settings
 from app.schemas.analysis import AnalyzeResponse, Finding, ToolCallRecord
+from app.services import deep_analysis_service
+
+
+@pytest.fixture(autouse=True)
+def _clear_analyze_cache():
+    yield
+    deep_analysis_service._answer_cache.clear()
 
 
 def _signup_and_token(client, email: str) -> str:
@@ -167,6 +176,139 @@ def test_analyze_accepts_conversation_history(client, monkeypatch):
         },
     )
     assert resp.status_code == 200
+
+
+def test_analyze_cache_hit_skips_a_second_real_call(client, monkeypatch):
+    call_count = 0
+
+    def _counting_run_analysis(df, provider, question, conversation_history=None):
+        nonlocal call_count
+        call_count += 1
+        return _fake_run_analysis(df, provider, question, conversation_history)
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis", _counting_run_analysis
+    )
+
+    token = _signup_and_token(client, "analyze-cache@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+    body = {"question": "How many rows are there?"}
+
+    first = client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+    second = client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+
+    assert first.status_code == second.status_code == 200
+    assert first.json()["answer"] == second.json()["answer"]
+    assert call_count == 1  # the second request was served from cache
+
+
+def test_analyze_cache_key_normalizes_whitespace_and_case(client, monkeypatch):
+    call_count = 0
+
+    def _counting_run_analysis(df, provider, question, conversation_history=None):
+        nonlocal call_count
+        call_count += 1
+        return _fake_run_analysis(df, provider, question, conversation_history)
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis", _counting_run_analysis
+    )
+
+    token = _signup_and_token(client, "analyze-cache-norm@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+
+    client.post(
+        f"/api/v1/datasets/{dataset_id}/analyze",
+        headers=headers, json={"question": "How many rows are there?"},
+    )
+    client.post(
+        f"/api/v1/datasets/{dataset_id}/analyze",
+        headers=headers, json={"question": "  HOW MANY rows are there?  "},
+    )
+
+    assert call_count == 1
+
+
+def test_analyze_does_not_cache_across_different_datasets(client, monkeypatch):
+    call_count = 0
+
+    def _counting_run_analysis(df, provider, question, conversation_history=None):
+        nonlocal call_count
+        call_count += 1
+        return _fake_run_analysis(df, provider, question, conversation_history)
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis", _counting_run_analysis
+    )
+
+    token = _signup_and_token(client, "analyze-cache-multi@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_a = _upload_sales(client, headers)
+    dataset_b = _upload_sales(client, headers)
+    body = {"question": "How many rows are there?"}
+
+    client.post(f"/api/v1/datasets/{dataset_a}/analyze", headers=headers, json=body)
+    client.post(f"/api/v1/datasets/{dataset_b}/analyze", headers=headers, json=body)
+
+    assert call_count == 2  # different datasets — never share a cache entry
+
+
+def test_analyze_never_caches_a_question_with_conversation_history(client, monkeypatch):
+    call_count = 0
+
+    def _counting_run_analysis(df, provider, question, conversation_history=None):
+        nonlocal call_count
+        call_count += 1
+        return _fake_run_analysis(df, provider, question, conversation_history)
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis", _counting_run_analysis
+    )
+
+    token = _signup_and_token(client, "analyze-cache-history@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+    body = {
+        "question": "Why?",
+        "conversation_history": [{"question": "Which region is best?", "answer": "East."}],
+    }
+
+    client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+    client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+
+    assert call_count == 2  # a follow-up's meaning depends on its history — never cached
+
+
+def test_analyze_never_caches_a_degraded_response(client, monkeypatch):
+    call_count = 0
+
+    def _counting_degraded(df, provider, question, conversation_history=None):
+        nonlocal call_count
+        call_count += 1
+        return AnalyzeResponse(
+            question=question,
+            answer="The AI provider did not return a usable response after retrying.",
+            status="degraded",
+        )
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr("app.services.deep_analysis_service.run_analysis", _counting_degraded)
+
+    token = _signup_and_token(client, "analyze-cache-degraded@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+    body = {"question": "Give me a complete executive analysis."}
+
+    client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+    client.post(f"/api/v1/datasets/{dataset_id}/analyze", headers=headers, json=body)
+
+    assert call_count == 2  # a degraded/fallback answer must always get a real retry
 
 
 def test_analyze_rejects_empty_question(client, monkeypatch):
