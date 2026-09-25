@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Step 1 of 7 done |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1-2 of 7 done |
 
 ## Known issues
 
@@ -382,5 +382,59 @@ short — what changed and what's next, not a full diff.
   HTTP contract instead. Worth a manual click-through before calling this
   fully shipped.
 - **Next up:** Phase 8, Step 2 — NL-to-SQL safety audit.
+
+## 2026-09-25 (later still — Phase 8, Step 2 done: 2 real bypasses found & fixed)
+
+- **Audited `app/analytics/sql_validator.py`/`sql_engine.py` by actually
+  attacking them** — a real Python script throwing real payloads at
+  `validate_and_prepare()`/`execute_sql()`, not a code read. Found two
+  genuine, working bypasses:
+  1. **Bare function calls were never validated.** Only `exp.Table` and
+     `exp.Column` nodes were checked — `SELECT version() FROM dataset`
+     and `SELECT current_database() FROM dataset` both passed validation
+     and DuckDB actually executed them, returning the real engine version
+     and in-memory DB name. `SELECT current_setting('data_directory')`
+     also passed validation (execution itself happened to fail on that
+     particular key). Fixed by rejecting `exp.Anonymous` nodes outright —
+     discovered that sqlglot maps every standard SQL function (`SUM`,
+     `LOWER`, `CASE`, ...) to its own named class and falls back to
+     `Anonymous` for anything else, which covered every non-standard
+     function tried (`version`, `current_database`, `current_setting`,
+     `read_text`) with no hand-written allowlist needed. Verified
+     standard functions (aggregates, `UPPER`, `ROUND`, `CASE`,
+     `COALESCE`) still work after the fix.
+  2. **A query's own `LIMIT` was never clamped**, only injected when
+     absent — `SELECT * FROM dataset LIMIT 999999999` sailed through
+     unchanged despite a `row_limit=100` argument. Fixed to always clamp
+     to `min(requested, row_limit)`, and to treat a non-literal `LIMIT`
+     expression (`LIMIT 1+1`) as unbounded rather than trusted.
+  3. Added `enable_external_access=false` on the DuckDB connection as a
+     second, independent layer — verified live it doesn't break the
+     registered dataset table, but does independently block
+     `read_csv('/etc/passwd')`/`INSTALL` even calling `execute_sql()`
+     directly with unvalidated SQL.
+  4. Closed a real test-coverage gap along the way: `QUERY_TIMEOUT_SECONDS`
+     had never actually been exercised by a test for the SQL path in this
+     whole codebase — added one (mocked a slow `execute_sql`, confirmed a
+     clean `408` within the configured window, not a hang).
+  5. Added a real cross-user ownership test for `/ask-sql`
+     (`test_ask_sql_cannot_reach_another_users_real_dataset`) — the only
+     prior test used a nonexistent UUID, which would pass even if
+     ownership scoping were completely broken.
+- **18 new backend tests, 245/245 passing**, ruff/mypy clean.
+- **Docs**: found and fixed the *same* stale, false claim
+  ("there is no SQL/DuckDB anywhere in this codebase") in **both**
+  `docs/ARCHITECTURE.md` and `docs/SECURITY.md` — both predated V2's
+  NL-to-SQL and were never corrected after it shipped, in addition to
+  `docs/AI_ANALYTICS.md` from Step 1. `docs/SECURITY.md` now has a full,
+  itemized "Natural Language to SQL / SQL Explorer — audited" section
+  covering every guarantee and exactly what was tried against it.
+- **What the audit did not find** (stated honestly, not implied): no
+  exploit reading an arbitrary file, reaching the network, or crossing
+  into another user's data — both real findings were information
+  disclosure limited to the querying user's own request/response. That
+  doesn't rule either out, only that these specific attempts didn't find
+  one.
+- **Next up:** Phase 8, Step 3 — evaluation harness.
   genuine limitations logged in BUGS.md (frontend test suite, real R2
   credentials, etc.).

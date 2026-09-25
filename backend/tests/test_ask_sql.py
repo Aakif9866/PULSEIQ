@@ -128,3 +128,24 @@ def test_ask_sql_unknown_dataset_returns_404(client):
         json={"question": "anything"},
     )
     assert resp.status_code == 404
+
+
+def test_ask_sql_cannot_reach_another_users_real_dataset(client):
+    # The 404-on-missing-ID test above passes even if ownership scoping
+    # were completely broken — this is the actual guarantee (Phase 8 step
+    # 2 security audit, docs/SECURITY.md): a real dataset ID that exists,
+    # just not owned by the caller, must 404 exactly the same way, never
+    # leak that it exists nor return its data.
+    owner_token = _signup_and_token(client, "sqlowner2@pulseiq.dev")
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    dataset_id = _upload_sales(client, owner_headers)
+
+    intruder_headers = {
+        "Authorization": f"Bearer {_signup_and_token(client, 'sqlintr2@pulseiq.dev')}"
+    }
+    resp = client.post(
+        f"/api/v1/datasets/{dataset_id}/ask-sql",
+        headers=intruder_headers,
+        json={"question": "anything"},
+    )
+    assert resp.status_code == 404

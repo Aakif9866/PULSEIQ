@@ -58,6 +58,35 @@ def test_run_sql_rejects_unsafe_query(client):
     assert resp.status_code == 422
 
 
+def test_run_sql_enforces_query_timeout(client, monkeypatch):
+    # Phase 8 step 2 security audit (docs/SECURITY.md): the timeout
+    # guarantee mentioned in V2_ROADMAP.md/AI_ANALYTICS.md had never
+    # actually been exercised by a test, for any of the three SQL-running
+    # call sites. This is the SQL Explorer's (the most directly
+    # user-facing one) — a slow query must be cut off, not left to run
+    # indefinitely, and must surface as a clean 408, not a raw 500/hang.
+    import time
+
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "QUERY_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(
+        "app.services.history_service.execute_sql",
+        lambda df, sql: time.sleep(3) or None,  # never actually reached in time
+    )
+
+    headers = {"Authorization": f"Bearer {_signup_and_token(client, 'explorerslow@pulseiq.dev')}"}
+    dataset_id = _upload_sales(client, headers)
+
+    resp = client.post(
+        f"/api/v1/datasets/{dataset_id}/sql",
+        headers=headers,
+        json={"sql": "SELECT * FROM dataset"},
+    )
+    assert resp.status_code == 408
+    assert "too long" in resp.json()["detail"].lower()
+
+
 def test_run_sql_requires_auth(client):
     resp = client.post(
         "/api/v1/datasets/00000000-0000-0000-0000-000000000000/sql", json={"sql": "SELECT 1"}

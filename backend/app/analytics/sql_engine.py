@@ -6,6 +6,15 @@ a separately-hosted database. A fresh, disposable connection is opened per
 query, the dataset's Polars DataFrame is registered as the only table it
 can see, and the connection is always closed afterward. No query reaches
 this function without first passing app.analytics.sql_validator.
+
+`enable_external_access=false` is a second, independent safety layer on
+top of that validation, not a substitute for it — added during the Phase
+8 step 2 security audit (docs/SECURITY.md). Verified live: it doesn't
+break the registered `dataset` table (an in-memory Python object, no
+filesystem/network involved), but does independently block
+`read_csv`/`INSTALL`/etc. at the DuckDB engine level even if the sqlglot
+validator were ever bypassed or a new DuckDB function it doesn't know to
+reject shipped in a future version.
 """
 import duckdb
 import polars as pl
@@ -19,7 +28,7 @@ _TABLE_NAME = "dataset"
 def execute_sql(df: pl.DataFrame, sql: str) -> DatasetQueryResult:
     """`sql` must already be validated (app.analytics.sql_validator) —
     this function trusts it completely and just runs it."""
-    connection = duckdb.connect(":memory:")
+    connection = duckdb.connect(":memory:", config={"enable_external_access": "false"})
     try:
         connection.register(_TABLE_NAME, df)
         try:

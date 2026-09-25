@@ -100,3 +100,106 @@ looking but incorrect workaround.
    trigger for reconsidering (e.g. once there's a second page depending
    on the same evidence panel, or before a real deploy where a visual
    regression would be user-facing).
+
+---
+
+## Step 2 — NL-to-SQL safety audit
+
+### What was built
+
+Two real, working validation bypasses in the NL-to-SQL/SQL Explorer
+path were found by actually attacking the deployed validator/engine
+with real payloads, not by reading the code and reasoning about it:
+(1) bare function calls (`version()`, `current_database()`,
+`current_setting(...)`) had no validation at all and executed
+successfully; (2) a query specifying its own `LIMIT` bypassed the row
+cap entirely, however large. Both fixed — the function gap by rejecting
+`sqlglot`'s `exp.Anonymous` node class outright (every standard SQL
+function gets its own named class; everything else falls back to
+Anonymous, which covered every non-standard function tried with zero
+hand-maintained allowlist), the limit gap by always clamping to
+`min(requested, row_limit)`. Added `enable_external_access=false` on
+the DuckDB connection as an independent second layer. Closed a real
+test-coverage gap (query timeout had never been tested for the SQL
+path) and a real ownership-test gap (`/ask-sql`'s only prior test used
+a fake UUID, not a real dataset owned by someone else). Corrected the
+same stale "no SQL/DuckDB in this codebase" claim in three different
+docs (`ARCHITECTURE.md`, `AI_ANALYTICS.md`, `SECURITY.md`) that all
+predated V2's NL-to-SQL shipping and were never updated afterward.
+
+### Why this approach over the alternatives
+
+**Attacking the real code over auditing by reading it.** The plan asked
+for a "safety audit" — the tempting shortcut is to read
+`sql_validator.py`, reason about what it does, and write down what
+*should* be true. That's exactly how the two real gaps here survived
+undetected through the original implementation and its own test suite:
+the code's own docstring confidently asserted defense-in-depth that
+didn't fully exist. Writing a standalone script that actually calls
+`validate_and_prepare()` and `execute_sql()` with real attack payloads,
+against the real installed `sqlglot`/`duckdb` versions, is the only way
+that gap gets caught — reasoning about code can miss what code actually
+does; running it can't.
+
+**Rejecting `exp.Anonymous` over hand-writing a function allowlist.**
+The obvious first instinct for "block dangerous functions" is a
+blocklist (`version`, `current_database`, `read_text`, ...) or an
+allowlist (`SUM`, `AVG`, `COUNT`, ...) maintained by hand. Both were
+rejected once inspecting `sqlglot`'s actual parse output showed every
+standard SQL function already gets its own specific AST class — meaning
+`exp.Anonymous` *is* an implicit "unrecognized function" signal for
+free, with no list to keep in sync as DuckDB adds functions or as new
+extensions become autoloadable (confirmed live: this DuckDB version has
+`autoload_known_extensions=true` by default, meaning a function
+belonging to an extension can become available with no explicit
+`INSTALL`/`LOAD` statement at all — a hand-written allowlist would need
+to anticipate that; rejecting Anonymous doesn't need to).
+
+**`enable_external_access=false` as defense-in-depth, not a
+replacement for the validator.** Once the validator correctly rejected
+every attack tried, the temptation is to stop there. The DuckDB
+connection setting was added anyway, verified live to still allow the
+one legitimate operation (querying the registered in-memory table) while
+independently blocking filesystem/network functions — because the
+validator's own docstring already states this codebase's philosophy
+("defense in depth, not a single check," `docs/V2_ROADMAP.md`), and a
+single layer that's *currently* correct is still one bug away from not
+being. A second, structurally different layer (an engine-level
+permission flag, not another AST check) doesn't share the same failure
+mode as the first.
+
+**Fail-safe over fail-open for an unparseable `LIMIT`.** `LIMIT 1+1` is
+valid SQL but not a plain integer literal this code can read directly.
+The easy-but-wrong choice: if it can't be parsed as a number, leave it
+alone (fail-open, trusting the original query). Chosen instead: treat
+"couldn't confidently parse this as a small number" the same as
+"absent," and clamp it — consistent with the rest of this validator's
+posture (reject/clamp what can't be verified, never assume it's safe by
+default).
+
+### Interview questions to be ready for
+
+1. **"Walk me through the two SQL validation bugs you found. Why did
+   the existing table/column checks not catch a bare function call like
+   `version()`?"** Be ready to explain the actual AST shape: `exp.Table`
+   and `exp.Column` are specific node types the original checks
+   `find_all()`'d for, but a function call is neither — it's its own
+   node (`exp.Anonymous` for unrecognized ones), which nothing was
+   walking the tree looking for at all. The bug wasn't a broken check;
+   it was a category of node no check ever looked at.
+2. **"You added `enable_external_access=false` after the validator was
+   already fixed. Wasn't that redundant?"** Be ready to explain defense-
+   in-depth as a stance, not a checklist item — a second, independently-
+   reasoned layer only pays off exactly when the first one has a bug
+   neither of us has found yet, which is the whole point; explain the
+   concrete verification (it didn't break the real table, it did block
+   `read_csv` even when called directly, bypassing the validator
+   entirely).
+3. **"How do you know you found all the SQL injection bugs, not just
+   two of them?"** Be ready to answer this honestly, not defensively —
+   the audit found what it specifically tried (function calls, limit
+   bypass) and fixed those; it explicitly does *not* claim completeness
+   (see `docs/SECURITY.md`'s "What this audit did not find"). Be ready
+   to name what a more thorough pass would add: fuzzing, a wider payload
+   corpus, a second reviewer, and ongoing attention as DuckDB/sqlglot
+   versions change what `exp.Anonymous` actually catches.

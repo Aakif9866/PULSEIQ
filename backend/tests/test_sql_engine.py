@@ -54,3 +54,21 @@ def test_execute_sql_wraps_duckdb_errors_without_leaking_internals():
     )
     with pytest.raises(InvalidQueryError):
         execute_sql(_DF, safe)
+
+
+def test_execute_sql_blocks_filesystem_access_even_if_validation_is_bypassed():
+    # A second, independent safety layer (Phase 8 step 2 security audit,
+    # docs/SECURITY.md) — enable_external_access=false on the DuckDB
+    # connection itself, verified directly here by calling execute_sql
+    # with SQL that never went through sql_validator at all. This must
+    # never depend on the validator being correct or even present.
+    with pytest.raises(InvalidQueryError):
+        execute_sql(_DF, "SELECT * FROM read_csv('/etc/passwd')")
+
+
+def test_execute_sql_still_serves_the_registered_dataset_with_external_access_off():
+    # The hardening above must not be so aggressive it breaks the one
+    # legitimate data source — an in-memory Python object registration,
+    # not a filesystem/network operation.
+    result = execute_sql(_DF, "SELECT * FROM dataset")
+    assert result.row_count == 3

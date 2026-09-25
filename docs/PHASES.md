@@ -264,11 +264,32 @@ alternatives, 3 interview questions to be ready for).
       shapes (or none); faking a query from an arbitrary tool call would
       be misleading. Revisit once there's a real shape for "save this
       multi-tool analysis."
-- [ ] **Step 2 — NL-to-SQL safety audit.** Verify read-only execution,
-      SELECT-only statement allow-list, scoping to the user's own dataset,
-      row limit, query timeout, and rejection of multi-statement/injection
-      attempts; fix any gap found; add a test per guarantee; document the
-      model in `docs/SECURITY.md`.
+- [x] **Step 2 — NL-to-SQL safety audit.** Audited live against the real
+      validator/engine (`app/analytics/sql_validator.py`,
+      `sql_engine.py`), not a code read. **Two real, working bypasses
+      found and fixed:** (1) bare function calls (`version()`,
+      `current_database()`, `current_setting(...)`) were validated by
+      neither the table nor the column check and executed successfully,
+      disclosing engine/DB info — fixed by rejecting any `exp.Anonymous`
+      function node (sqlglot maps every standard SQL function to its own
+      class; everything else, including every DuckDB-specific function
+      found, falls back to Anonymous — no hand-maintained allowlist
+      needed); (2) a query specifying its own `LIMIT` (however large)
+      bypassed the row cap entirely — fixed to always clamp to
+      `min(requested, row_limit)`, treating a non-literal `LIMIT`
+      expression as unbounded rather than trusted. Added
+      `enable_external_access=false` on the DuckDB connection as a second,
+      independent engine-level layer (verified live: doesn't break the
+      registered dataset table; does independently block
+      `read_csv`/`INSTALL` even with validation bypassed). Also closed a
+      real test-coverage gap: the query-timeout guarantee had never
+      actually been exercised by a test for the SQL path — added one
+      proving a slow query surfaces a clean `408`, not a hang. Full
+      write-up with every payload tried in `docs/SECURITY.md`. 18 new
+      backend tests (245 total), ruff/mypy clean. Corrected a stale, now-
+      false "there is no SQL/DuckDB anywhere in this codebase" claim in
+      both `docs/ARCHITECTURE.md` and `docs/AI_ANALYTICS.md` — both
+      predated V2's NL-to-SQL and were never updated after it shipped.
 - [ ] **Step 3 — Evaluation harness.** `evals/` with 50+ questions across
       2-3 sample datasets, each with a ground-truth answer computed
       directly (Polars/SQL, never the LLM), covering all 16 tools,

@@ -4,25 +4,42 @@ What's actually implemented, not an aspirational diagram. Where something
 is a documented future step rather than working code, it's labeled
 **(planned)**.
 
-## A note before anything else: no DuckDB, no generated SQL
+## A note before anything else: two query pipelines exist, not one
 
-Several docs and prompts around this project (including the brief this
-file was written from) describe an "AI → SQL → DuckDB" pipeline. **That
-pipeline doesn't exist in this codebase.** `duckdb` is a `requirements.txt`
-dependency and nothing else — `grep -r duckdb backend/app` finds no
-imports. The real pipeline is:
+**This section used to say "no DuckDB, no generated SQL" and claimed
+that pipeline didn't exist in this codebase at all. That stopped being
+true once V2 shipped Natural Language to SQL and the SQL Explorer, and
+this file was never corrected — caught and fixed during the Phase 8
+step 2 security audit (`docs/PROGRESS.md`).** There are genuinely two
+independent pipelines today, not one:
 
+**1. The structured-query pipeline** (`/ask`, the dataset explorer) —
 question → Groq (JSON mode) → a small, closed Pydantic schema
 (`DatasetQueryRequest`: group_by / aggregations / filters / sort / limit,
 every column name validated against the dataset's real schema) → executed
 against a **Polars** DataFrame → result → Groq again for a plain-language
-summary.
+summary. No SQL anywhere in this path — structurally nothing for an
+injection attempt to break out into, regardless of phrasing.
 
-There is no free-form SQL anywhere, generated or otherwise — which also
-means there's no SQL injection surface to defend (see `SECURITY.md`).
-DuckDB stays in `requirements.txt` for if/when raw-SQL analysis is ever
-actually wanted; it is not silently unused by accident, it's unused by
-design so far.
+**2. The SQL pipeline** (`/ask-sql`, `/sql`, and the hybrid AI Analyst's
+`validate_formula` tool) — question or typed text → Groq generates (or a
+user types) a real `SELECT` statement → `app/analytics/sql_validator.py`
+(real AST parsing via `sqlglot`, not a regex/keyword blocklist) →
+**DuckDB**, finally giving the long-declared `requirements.txt`
+dependency an actual job, as an embedded in-process engine (a fresh,
+disposable connection per query, the dataset registered as its only
+table) → result → Groq again for a plain-language summary. This *is*
+real, AI-generated (or user-typed) SQL, with a real injection surface —
+see `docs/SECURITY.md`'s "Natural Language to SQL / SQL Explorer —
+audited" section for the actual validated threat model, including two
+real bypasses found and fixed during that audit, not just an assertion
+that it's safe.
+
+Both pipelines are real, current, and independently maintained — neither
+replaces the other. The hybrid AI Analyst (`/analyze`, `docs/PHASES.md`
+Phase 7) uses neither directly; its 16 tools call into Polars the same
+way the structured-query pipeline's execution does, except for
+`validate_formula`, which goes through the SQL pipeline above.
 
 ## System overview
 

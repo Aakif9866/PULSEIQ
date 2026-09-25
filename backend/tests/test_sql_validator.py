@@ -133,3 +133,80 @@ def test_empty_statement_is_rejected():
         validate_and_prepare(
             "", table_name="dataset", allowed_columns=COLUMNS, row_limit=10_000
         )
+
+
+# ---- Phase 8 step 2 security audit regressions (docs/SECURITY.md) ----
+# Every case below was a real, working bypass verified live against this
+# module before the fix — not a hypothetical.
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT version() FROM dataset",
+        "SELECT current_database() FROM dataset",
+        "SELECT current_setting('data_directory') FROM dataset",
+        "SELECT read_text('/etc/passwd') FROM dataset",
+        "SELECT region FROM dataset WHERE revenue > (SELECT length(read_text('/etc/passwd')))",
+    ],
+)
+def test_unrecognized_function_calls_are_rejected(sql):
+    # Only exp.Table and exp.Column were ever checked — a bare function
+    # call in the SELECT list or WHERE clause had no validation at all,
+    # so `SELECT version() FROM dataset` executed and returned the real
+    # DuckDB version, and current_setting()/read_text() were reachable
+    # the same way. sqlglot maps every standard SQL function to its own
+    # class and falls back to exp.Anonymous for anything else — which is
+    # exactly true of every one of these.
+    with pytest.raises(InvalidQueryError, match="Function not allowed"):
+        validate_and_prepare(sql, table_name="dataset", allowed_columns=COLUMNS, row_limit=10_000)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT region, SUM(revenue) AS total FROM dataset GROUP BY region",
+        "SELECT COUNT(*) FROM dataset",
+        "SELECT UPPER(region) FROM dataset",
+        "SELECT ROUND(revenue, 2) FROM dataset",
+        "SELECT CASE WHEN revenue > 10 THEN 'x' ELSE 'y' END FROM dataset",
+        "SELECT COALESCE(revenue, 0) FROM dataset",
+    ],
+)
+def test_standard_sql_functions_still_pass(sql):
+    # The exp.Anonymous check must not become an overzealous allowlist
+    # that breaks the ordinary aggregate/string/date/math functions
+    # NL-to-SQL and the SQL Explorer both need day to day.
+    validate_and_prepare(sql, table_name="dataset", allowed_columns=COLUMNS, row_limit=10_000)
+
+
+def test_oversized_limit_is_clamped_not_trusted():
+    # The original `if stmt.args.get("limit") is None` only ever injected
+    # a LIMIT when one was absent — a query that already specified its
+    # own (e.g. an oversized one) sailed through completely unclamped.
+    sql = validate_and_prepare(
+        "SELECT region FROM dataset LIMIT 999999999",
+        table_name="dataset", allowed_columns=COLUMNS, row_limit=100,
+    )
+    assert "LIMIT 100" in sql
+    assert "999999999" not in sql
+
+
+def test_limit_under_the_cap_is_left_alone():
+    sql = validate_and_prepare(
+        "SELECT region FROM dataset LIMIT 5",
+        table_name="dataset", allowed_columns=COLUMNS, row_limit=100,
+    )
+    assert "LIMIT 5" in sql
+
+
+def test_non_literal_limit_is_treated_as_unbounded_and_clamped():
+    # LIMIT 1+1 is a real, if unusual, valid SQL expression — not an
+    # integer literal this module can read directly. Failing safe here
+    # means clamping it rather than letting an unparseable limit through
+    # unbounded.
+    sql = validate_and_prepare(
+        "SELECT region FROM dataset LIMIT 1+1",
+        table_name="dataset", allowed_columns=COLUMNS, row_limit=100,
+    )
+    assert "LIMIT 100" in sql
