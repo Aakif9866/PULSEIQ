@@ -365,7 +365,11 @@ alternatives, 3 interview questions to be ready for).
       every step documented in `docs/DEPLOYMENT.md` marked verified vs.
       not; a demo account + sample dataset so a recruiter can try it in
       under a minute.
-- [ ] **Step 7 — Portfolio packaging.** Rewrite `README.md` — one-line
+- [~] **Step 7 — Portfolio packaging** *(README and docs/RESUME.md written, every claim
+      checked against the code and every number sourced — see RESUME.md's source table.
+      Two items outstanding: the short GIF needs a human screen recording (no browser or
+      recording tool in this environment), and the eval results table waits on a
+      complete live run)*. Original scope: Rewrite `README.md` — one-line
       pitch, live demo link, short GIF, Mermaid architecture diagram, eval
       results table, "key engineering decisions" (deterministic tools +
       validator over free-form answers, how NL-to-SQL stays safe, how rate

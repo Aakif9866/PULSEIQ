@@ -490,3 +490,58 @@ names, and argument *names* are enough to debug with.
    and multi-KB values bloating every log line. Explain the choice to
    replace rather than reject, so correlation degrades gracefully while
    the real request still succeeds.
+
+---
+
+## Step 7 — Portfolio packaging
+
+### What was built
+
+A rewritten `README.md` (one-line pitch, live demo with credentials, a
+Mermaid architecture diagram, the three key engineering decisions,
+evaluation status, and quality signals) and `docs/RESUME.md` (four
+bullets plus an alternate, a one-line description, a 30-second pitch,
+and a table sourcing every number).
+
+### Why this approach over the alternatives
+
+**Auditing my own copy against the code before committing it.** The
+first README draft overstated three things in good faith: it called all
+16 tools "Polars" (one uses DuckDB), said the validator checks "every
+number in the answer" (it checks each reported finding), and credited
+two bugs to live tracing (only one was). Each is a small word, and each
+is exactly the kind of claim an interviewer probes. Portfolio copy is a
+set of claims, and it gets verified like code.
+
+**Leaving accuracy out of the resume.** The obvious bullet is "achieved
+N% accuracy on 51 questions". The complete run hasn't happened, and a
+percentage from 26 partial questions would present an incomplete result
+as a finished one. The resume uses counts that are real (16 tools, 51
+questions, 2 bypasses, 316 and 24 tests), and RESUME.md says plainly
+which numbers are missing and why.
+
+**No GIF placeholder.** A broken image or a mock screenshot in a README
+reads worse than no image. The GIF needs a real screen recording, and
+that's recorded as outstanding rather than faked.
+
+**Checking the resume rules mechanically.** Word counts, verb-first,
+and pronoun checks were done with a script, not by eye, and "spell out
+acronyms on first use" was checked bullet by bullet.
+
+### Interview questions to be ready for
+
+1. **"Your resume says 16 tools and a validator. What happens when the
+   model reports a number the tools didn't produce?"** Explain the
+   validator: the finding is kept, flagged unverified, and shown with a
+   warning rather than dropped. Then point to the eval harness as the
+   way to measure how often it happens.
+2. **"Why isn't there an accuracy number on your resume?"** The full
+   run hit Groq's daily token cap at question 27. Say why a partial
+   percentage would be misleading, and what the complete run needs (a
+   fresh daily quota or a paid tier; `--resume` makes it restartable).
+3. **"Walk me through your architecture diagram."** Follow one request:
+   the browser sends an id, FastAPI authenticates, the engine loops
+   between the LLM and the tools, the validator checks the findings, and
+   the response comes back with the same id. Be ready for "where does
+   SQL come in?": a separate path through the validator and a sandboxed
+   DuckDB.

@@ -618,3 +618,10 @@ short — what changed and what's next, not a full diff.
   "aakif9866's Projects", personal and matching the GitHub handle.
 - **Next:** you open the PR; once CI is green, set the three production
   variables, merge, and verify the live deploy for real.
+
+- **Step 7 drafted while the PR is pending:** README and `docs/RESUME.md`
+  written, then audited against the code. Three overstatements in the
+  first draft were corrected before committing (tool engine, validator
+  scope, which bug came from tracing). Resume bullets checked by script:
+  21-24 words, verb-first, no pronouns. Outstanding: a GIF (needs a human
+  screen recording) and eval accuracy (needs a complete live run).
