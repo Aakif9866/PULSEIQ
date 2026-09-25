@@ -290,13 +290,29 @@ alternatives, 3 interview questions to be ready for).
       false "there is no SQL/DuckDB anywhere in this codebase" claim in
       both `docs/ARCHITECTURE.md` and `docs/AI_ANALYTICS.md` — both
       predated V2's NL-to-SQL and were never updated after it shipped.
-- [ ] **Step 3 — Evaluation harness.** `evals/` with 50+ questions across
-      2-3 sample datasets, each with a ground-truth answer computed
-      directly (Polars/SQL, never the LLM), covering all 16 tools,
-      NL-to-SQL, and multi-step questions. Runner reports accuracy,
-      validator catch rate, tool-selection accuracy, average latency and
-      tokens/question; compares `/ask` vs `/analyze` where possible.
-      Results recorded in `docs/EVALS.md`.
+- [~] **Step 3 — Evaluation harness (built and verified; full live
+      results run in progress, blocked partway by a real external
+      limit).** `evals/` built: 51 questions across 2 deterministically-
+      generated sample datasets, ground truth computed by calling
+      `app.ai.tools` directly (never the LLM), covering all 16 tools,
+      NL-to-SQL, and 4 multi-step questions; a runner that scores
+      tool-selection accuracy, value accuracy, the validator's
+      intervention rate, and real token/latency numbers pulled off
+      Groq's own API response via an external instrumentation layer
+      (`evals/instrumentation.py`, no production code changed for it).
+      **Live run status**: 26/51 questions got a real, successful answer
+      before Groq's free-tier *daily* token cap (200,000/day — separate
+      from the per-minute limit already known about) was hit mid-run.
+      Along the way, this run also found and fixed BUG-016 (an explicit
+      `null` optional tool argument 400ing on Groq) and a real
+      resilience gap in the runner itself — it only wrote results at the
+      very end, so killing the process partway through the quota wall
+      lost the 26 successful questions' detailed data (kept only as
+      coarse pass/fail lines in the run log). Fixed: results are now
+      written after every question, and `--resume` skips whatever
+      already succeeded. Full numbered results are pending a completed
+      run (resuming once quota allows) — `docs/EVALS.md` documents this
+      status honestly rather than filling in estimated numbers.
 - [ ] **Step 4 — LLM rate limits and cost.** Audit what already exists
       first, add only what's missing: schema/dtype/null-stats/sample-rows/
       tool-output only ever sent to the LLM, never raw full data; answer

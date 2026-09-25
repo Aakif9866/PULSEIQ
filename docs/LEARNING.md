@@ -203,3 +203,106 @@ default).
    to name what a more thorough pass would add: fuzzing, a wider payload
    corpus, a second reviewer, and ongoing attention as DuckDB/sqlglot
    versions change what `exp.Anonymous` actually catches.
+
+---
+
+## Step 3 — Evaluation harness
+
+### What was built
+
+51 questions across 2 deterministically-generated sample datasets
+(e-commerce orders, employee records — both with deliberately injected
+duplicates, missing values, out-of-range values, and a formula
+mismatch), covering all 16 analytical tools, the Natural Language to SQL
+path, and 4 genuinely multi-step questions. Ground truth for every
+question is computed by calling this project's own real `app.ai.tools`
+functions directly — never a hand-rolled second implementation.
+`evals/runner.py` drives each question through the real, live
+Groq-backed pipeline (not a scripted/mocked provider — see the
+trade-off below), scores the response, and records tool-selection
+accuracy, value accuracy, the answer validator's intervention rate, and
+real token/latency numbers pulled straight off Groq's own API response,
+via an external instrumentation layer that patches the shared Groq
+client with no change to any production code. Full numbers:
+`docs/EVALS.md`.
+
+### Why this approach over the alternatives
+
+**Live Groq calls over a scripted/mocked provider.** The existing unit
+tests (`tests/test_analyst_engine.py`) already prove the tool-calling
+*loop's logic* is correct given a scripted provider's canned responses.
+An eval whose provider is also scripted would only re-prove that same
+logic — it structurally cannot answer "does the real model pick the
+right tool and get the right number for a real question," which is the
+actual thing worth measuring here. The cost of that choice is real: live
+calls are slow, rate-limited (Groq's free tier — 8000 TPM, hit
+repeatedly during this project's own earlier testing, `docs/BUGS.md`),
+and non-deterministic run to run. Accepted deliberately, with pacing
+(`--sleep`) and per-question failure isolation (one provider failure
+never aborts the whole run) as the mitigation, not a workaround that
+quietly makes the eval fake again.
+
+**Ground truth from the app's real tools, not a second implementation.**
+The tempting alternative — write eval-only code that independently
+computes "the median revenue" or "how many outliers" — was rejected
+because any drift between that second implementation and the app's real
+one (e.g. a slightly different IQR multiplier) would silently produce a
+*wrong* ground truth that the eval would then trust completely. Calling
+`app.ai.tools` directly means the eval can only ever be checking
+"did the model use these tools and report their real output correctly,"
+which is exactly what needs checking — never "did we reinvent outlier
+detection and land on the same formula twice."
+
+**External instrumentation over changing `AnalyzeResponse`'s schema.**
+Getting real token counts could have meant adding a `usage` field to
+`AnalyzeResponse` and threading it through `analyst_engine.run_analysis`
+— a public API schema change for every caller, for a need that's
+specific to this eval harness (and, later, Step 4's cost logging).
+Instead, `app.ai.groq_client.get_groq_client()`'s single shared,
+cached client instance is patched externally, once, in
+`evals/instrumentation.py` — every AI code path (`/analyze`, the legacy
+`/ask`, NL-to-SQL) already funnels through that one object, so this
+captures usage for all three with zero lines changed under
+`backend/app/`. `ProviderMessage` did still gain a small, optional
+`usage` field (`app/ai/providers/base.py`) as part of this step — that
+one *is* production code, but it's additive (defaults to `None`,
+nothing existing reads or requires it) and directly reusable by Step 4's
+real per-request cost logging, rather than eval-only scaffolding that
+would need rebuilding later.
+
+**A regex/tolerance value-matcher over an LLM-as-judge grader.** Using a
+second AI call to grade whether an answer is "correct" was considered
+and rejected for this step: it would make the eval's own correctness
+depend on the same class of system it's trying to evaluate, adds cost
+and latency to every single question, and produces a grade that's
+harder to audit than "here are the literal numbers extracted from the
+text and the tolerance they were checked against." A plain
+regex-extraction-plus-tolerance matcher is weaker (documented
+explicitly in `docs/EVALS.md`'s Methodology section — it can miss a
+correctly-phrased answer or accept a coincidental number) but every
+scoring decision it makes is inspectable in the raw results file, which
+matters more for a portfolio project meant to be defended in an
+interview than a marginally smarter but opaque grader would.
+
+### Interview questions to be ready for
+
+1. **"Your eval harness makes real, live LLM calls instead of mocking
+   the provider. Isn't that flaky and expensive — why not mock it like
+   your unit tests do?"** Be ready to explain the difference in what
+   each is actually testing (engine logic vs. real model behavior), and
+   the concrete mitigations for flakiness/cost (pacing, per-question
+   isolation, a `--limit` flag for a cheap smoke test before committing
+   to a full paced run).
+2. **"How do you compute 'ground truth' for a question like 'is this
+   revenue outlier a real order or bad data' — that's not a single
+   number?"** Be ready to explain that multi-step questions still pin a
+   single, checkable fact (e.g. which specific order/record the
+   investigation should surface) even when the full answer is
+   necessarily prose — and to be honest that the free-text matcher is a
+   heuristic, not a semantic grader, exactly as stated in
+   `docs/EVALS.md`.
+3. **"What's a concrete number this eval found that surprised you, and
+   what would you do about it?"** Answer from the real, committed
+   `docs/EVALS.md` results at the time of the interview — this is the
+   one question on this list whose answer must come from that file, not
+   from memory of what was expected going in.

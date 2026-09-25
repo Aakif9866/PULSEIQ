@@ -1,0 +1,11 @@
+[tool.ruff]
+# A slightly wider line length than backend/pyproject.toml's 100 —
+# eval_questions.py is mostly natural-language question text and
+# explanatory notes as string literals, which don't wrap as cleanly as
+# code. Everything else (unused imports, import order, modernized
+# syntax) still applies at the same strictness as the rest of the repo.
+line-length = 115
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

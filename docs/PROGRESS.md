@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1-2 of 7 done |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1-2 done, Step 3 built/partial |
 
 ## Known issues
 
@@ -436,5 +436,61 @@ short — what changed and what's next, not a full diff.
   doesn't rule either out, only that these specific attempts didn't find
   one.
 - **Next up:** Phase 8, Step 3 — evaluation harness.
-  genuine limitations logged in BUGS.md (frontend test suite, real R2
-  credentials, etc.).
+
+## 2026-09-25 (later still — Phase 8, Step 3 built, live run partially complete)
+
+- **Built `evals/`**: 51 questions across 2 deterministically-generated
+  sample datasets (e-commerce, employees — both with deliberately
+  injected duplicates, missing values, out-of-range values, and a
+  formula mismatch), covering all 16 tools, NL-to-SQL, and 4 multi-step
+  questions. Ground truth computed by calling `app.ai.tools` directly
+  (never the LLM). A runner that drives each question through the real,
+  live Groq-backed pipeline and scores tool-selection accuracy, value
+  accuracy, and the validator's intervention rate, with real token/
+  latency numbers captured via an external instrumentation layer
+  (`evals/instrumentation.py`) that patches the one shared Groq client —
+  zero changes to any file under `backend/app/` needed for that part.
+- **Found and fixed BUG-016 within the first 5 questions of the first
+  live run**: the model called `get_duplicates` with `{"column": null}`
+  (normal tool-calling behavior for "omit this"), and Groq's own schema
+  validation rejected it outright — 400 on all 3 retries, failing the
+  whole question. Root cause: every optional tool parameter in
+  `app/ai/tool_specs.py` was a bare `{"type": "string"}` with no `null`
+  allowed. Fixed by auto-widening every non-required property's schema
+  to accept `null`, verified live against the real Groq API before
+  rolling it out, plus stripping `None`-valued arguments in `call_tool()`
+  so an explicit null and an omitted key behave identically. 5 new
+  backend tests, 250/250 passing.
+- **Relaunched the full run — got 26/51 questions through with a real,
+  successful answer before hitting a second, harder constraint**: Groq's
+  free tier caps total tokens *per day* (200,000 TPD), not just per
+  minute — question 27 hit it directly (`Used 199747, Requested 1057`).
+  This is a genuine external resource limit, not a bug — exactly what
+  Phase 8 step 4 exists to manage (quotas, a fallback provider, cost
+  visibility).
+- **A real mistake, caught and fixed, not hidden**: killed the process
+  once it was clear continuing would just spend the rest of a ~20-minute
+  retry window on near-certain 429s — but `runner.py` only wrote its
+  results file at the very end of a full run, so the detailed
+  per-question data (answers, scores, tokens) for all 26 successful
+  questions was lost, leaving only the coarse pass/fail lines already
+  printed to the console log. **Fixed**: results are now written after
+  every single question, and a new `--resume` flag skips whatever
+  already succeeded rather than re-spending quota re-running it. 2 new
+  tests for this (`evals/test_runner.py`, run via plain `pytest`, not
+  part of the backend suite since `evals/` isn't application code).
+- **`docs/EVALS.md`** records this status honestly — a "what happened"
+  section instead of a results table filled with estimated numbers.
+  Genuinely verified without needing the lost data: the full pipeline
+  works end-to-end against a real live model (26/27 attempted questions
+  succeeded with sane answers, observed directly), and one real,
+  interesting finding survived in the log either way — a `Finding` whose
+  `value` came back as a list of row dicts instead of a scalar was
+  caught and dropped cleanly by existing validation
+  (`analysis_finding_dropped_invalid_shape`) rather than crashing.
+- **Next up:** resume the run (`--resume`) once Groq's daily quota has
+  enough headroom — the retry-after values observed (5-19 minutes,
+  fluctuating) suggest a rolling window rather than a fixed daily reset,
+  so this may be resumable later today rather than only tomorrow. Once
+  it completes, fill in `docs/EVALS.md`'s results table with the real
+  numbers and mark Phase 8 step 3 fully done. Then step 4.
