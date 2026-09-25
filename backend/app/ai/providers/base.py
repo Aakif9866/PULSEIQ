@@ -28,6 +28,14 @@ class ProviderMessage:
 
     content: str | None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    # Token accounting for this one call, when the provider reports it
+    # (Groq does, via an OpenAI-compatible `usage` object) — None rather
+    # than zeros when unavailable, so a caller summing across a
+    # multi-call tool loop can tell "no usage reported" apart from
+    # "reported and zero". Added for docs/PHASES.md Phase 8 steps 3
+    # (evals/ tokens-per-question) and 4 (cost logging) — every other
+    # caller of AIProvider.chat() is unaffected by this being optional.
+    usage: dict[str, int] | None = None
 
 
 class AIProvider(ABC):

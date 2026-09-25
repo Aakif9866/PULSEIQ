@@ -24,9 +24,13 @@ class _FakeToolCall:
         self.function = _FakeToolCallFunction(name, arguments)
 
 
-def _fake_response(content: str | None, tool_calls: list[_FakeToolCall] | None = None):
+def _fake_response(
+    content: str | None,
+    tool_calls: list[_FakeToolCall] | None = None,
+    usage: SimpleNamespace | None = None,
+):
     message = SimpleNamespace(content=content, tool_calls=tool_calls or None)
-    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+    return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=usage)
 
 
 class _BadRequestLike(Exception):
@@ -95,6 +99,29 @@ def test_chat_returns_real_tool_calls(monkeypatch):
         messages=[{"role": "user", "content": "hi"}], tools=[{"type": "function"}]
     )
     assert message.tool_calls[0].name == "get_missing_values"
+
+
+def test_chat_captures_token_usage_when_the_sdk_reports_it(monkeypatch):
+    # Added for docs/PHASES.md Phase 8 steps 3 (evals/ tokens-per-
+    # question) and 4 (cost logging) — Groq's usage object was
+    # previously read at all.
+    usage = SimpleNamespace(
+        prompt_tokens=120, completion_tokens=30, total_tokens=150, total_time=0.42
+    )
+    _install_fake_client(monkeypatch, [_fake_response("hello", usage=usage)])
+    message = GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert message.usage == {
+        "prompt_tokens": 120,
+        "completion_tokens": 30,
+        "total_tokens": 150,
+        "total_time_ms": 420,
+    }
+
+
+def test_chat_usage_is_none_not_zeroed_when_the_sdk_omits_it(monkeypatch):
+    _install_fake_client(monkeypatch, [_fake_response("hello")])
+    message = GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert message.usage is None
 
 
 def test_chat_retries_on_empty_response_then_succeeds(monkeypatch):

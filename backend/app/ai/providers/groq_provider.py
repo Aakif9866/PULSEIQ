@@ -68,6 +68,28 @@ def _salvage_fake_json_tool_call(exc: Exception) -> ProviderMessage | None:
     return ProviderMessage(content=content, tool_calls=[])
 
 
+def _extract_usage(response: Any) -> dict[str, int] | None:
+    """Groq's response.usage is an OpenAI-compatible CompletionUsage —
+    prompt/completion/total tokens, plus Groq-reported generation time
+    (`total_time`, seconds) which is a more precise "how long did the
+    model actually take" number than a caller's own wall-clock timing
+    (that also includes network/queueing). None (not a zeroed dict) when
+    the SDK didn't report usage at all, so a caller can tell the
+    difference rather than silently summing in a false zero."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return None
+    result: dict[str, int] = {}
+    for field_name in ("prompt_tokens", "completion_tokens", "total_tokens"):
+        value = getattr(usage, field_name, None)
+        if value is not None:
+            result[field_name] = value
+    total_time = getattr(usage, "total_time", None)
+    if total_time is not None:
+        result["total_time_ms"] = round(total_time * 1000)
+    return result or None
+
+
 class GroqProvider(AIProvider):
     def chat(
         self,
@@ -131,7 +153,9 @@ class GroqProvider(AIProvider):
                 last_error = AiResponseError("The AI provider returned an empty response.")
                 continue
 
-            return ProviderMessage(content=message.content, tool_calls=tool_calls)
+            return ProviderMessage(
+                content=message.content, tool_calls=tool_calls, usage=_extract_usage(response)
+            )
 
         logger.error("groq_provider_exhausted_retries", error=str(last_error))
         raise AiResponseError(

@@ -14,15 +14,43 @@ from app.ai import tools
 _STRING_ARRAY = {"type": "array", "items": {"type": "string"}}
 
 
+def _make_nullable(schema: dict[str, Any]) -> dict[str, Any]:
+    """Widens a property's JSON-schema `type` to also allow `null`.
+
+    Found live (Phase 8 step 3 eval run, docs/PROGRESS.md): a model asked
+    to omit an optional parameter (e.g. get_duplicates' `column`, to
+    check whole-row duplicates rather than one column) commonly emits an
+    *explicit* `"column": null` rather than leaving the key out — normal,
+    common tool-calling behavior. Groq's own request-time schema
+    validation rejected that outright for a bare `{"type": "string"}`
+    property ("expected string, but got null") with a real 400,
+    exhausting every retry on the identical error and failing the whole
+    analysis. Verified live that `{"type": ["string", "null"]}` is
+    accepted instead. Applied automatically to every non-required
+    property in _spec() below — never required properties, which must
+    still always be genuinely provided."""
+    if "type" not in schema:
+        return schema
+    current = schema["type"]
+    types = current if isinstance(current, list) else [current]
+    if "null" in types:
+        return schema
+    return {**schema, "type": [*types, "null"]}
+
+
 def _spec(
     name: str, description: str, properties: dict[str, Any], required: list[str]
 ) -> dict[str, Any]:
+    widened = {
+        key: (schema if key in required else _make_nullable(schema))
+        for key, schema in properties.items()
+    }
     return {
         "type": "function",
         "function": {
             "name": name,
             "description": description,
-            "parameters": {"type": "object", "properties": properties, "required": required},
+            "parameters": {"type": "object", "properties": widened, "required": required},
         },
     }
 
@@ -199,8 +227,13 @@ def call_tool(name: str, df: pl.DataFrame, arguments: dict[str, Any]) -> dict[st
     func = _DISPATCH.get(name)
     if func is None:
         return {"error": f"Unknown tool: {name}"}
+    # An explicit `null` for an optional parameter (now accepted by the
+    # schema — see _make_nullable) must behave exactly like the key
+    # being absent, so each tool function's own Python default applies —
+    # not a `None` a function was never written to expect.
+    cleaned_arguments = {k: v for k, v in arguments.items() if v is not None}
     try:
-        return func(df, **arguments)
+        return func(df, **cleaned_arguments)
     except TypeError as exc:
         return {"error": f"Invalid arguments for {name}: {exc}"}
     except Exception as exc:  # noqa: BLE001 - a tool must never crash the analysis loop

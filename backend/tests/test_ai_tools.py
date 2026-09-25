@@ -171,3 +171,41 @@ def test_call_tool_never_raises_on_bad_arguments():
 def test_all_dispatch_entries_have_a_matching_tool_spec():
     spec_names = {spec["function"]["name"] for spec in tool_specs.TOOL_SPECS}
     assert spec_names == set(tool_specs._DISPATCH)
+
+
+# ---- Phase 8 step 3 eval-run regression (docs/PROGRESS.md) ----
+# Found live: a model emitting an explicit `"column": null` for an
+# optional parameter it meant to omit got a real 400 from Groq
+# ("expected string, but got null") for every optional property below,
+# exhausting retries and failing the whole analysis.
+
+
+def test_every_optional_property_schema_allows_null():
+    for spec in tool_specs.TOOL_SPECS:
+        fn = spec["function"]
+        required = set(fn["parameters"]["required"])
+        for name, schema in fn["parameters"]["properties"].items():
+            if name in required or "type" not in schema:
+                continue
+            declared_type = schema["type"]
+            types = declared_type if isinstance(declared_type, list) else [declared_type]
+            assert "null" in types, f"{fn['name']}.{name} must accept null (it's optional)"
+
+
+def test_call_tool_treats_an_explicit_null_argument_as_omitted():
+    df = _ecommerce_df()
+    # get_duplicates(column=None) is whole-row duplicate detection —
+    # exactly the real payload Groq sent live: {"column": null}.
+    with_explicit_null = tool_specs.call_tool("get_duplicates", df, {"column": None})
+    omitted_entirely = tool_specs.call_tool("get_duplicates", df, {})
+    assert with_explicit_null == omitted_entirely
+    assert "error" not in with_explicit_null
+
+
+def test_call_tool_falls_back_to_the_real_default_when_null_is_passed():
+    df = _ecommerce_df()
+    # get_top_records' n defaults to 10 — passing an explicit null for it
+    # must use that real default, not crash or silently return nothing.
+    result = tool_specs.call_tool("get_top_records", df, {"column": "revenue_inr", "n": None})
+    assert "error" not in result
+    assert result["n"] == 10
