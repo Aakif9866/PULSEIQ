@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | ⬜ Planned, not started |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Step 1 of 7 done |
 
 ## Known issues
 
@@ -332,5 +332,55 @@ short — what changed and what's next, not a full diff.
   it doesn't change anything in the code.
 - **Next up:** Phase 8, Step 1 — switch the AI Analysis page from `/ask`
   to `/analyze` and surface the validator's evidence in the UI.
+
+## 2026-09-25 (later — Phase 8, Step 1 done)
+
+- **AI Analysis page now calls `/analyze` by default**, not `/ask`. Split
+  `ai-analyst-page.tsx` into `AnalyzeAnalystView` (new) and
+  `AskAnalystView` (the old page, moved verbatim, unchanged behavior),
+  switched by `getAiAnalystEngine()` (`lib/feature-flags.ts`,
+  `VITE_AI_ANALYST_ENGINE`, default `"analyze"`). `/ask` stays fully
+  reachable and working behind the flag.
+- **Evidence panel**: the new view renders which tools ran (as chips,
+  failed ones flagged red), a findings list with a verified/unverified
+  icon per finding (never hidden when unverified — the whole point of
+  the backend's answer validator), a `degraded`-status banner, a
+  `needs_clarification` prompt, and any `warnings`.
+- **Frontend test infrastructure added from scratch** — this repo had
+  zero frontend tests before today. Vitest + `@testing-library/react` +
+  jsdom, `npm run test`. Found and fixed a real gap while writing the
+  first test: `@testing-library/react`'s auto-cleanup between tests
+  depends on detecting a global `afterEach`, which never fires because
+  `vitest.config.ts` deliberately runs without `test.globals: true` (kept
+  separate from `vite.config.ts` so the Tailwind plugin never runs under
+  the test runner) — without an explicit `afterEach(cleanup)` in
+  `src/test/setup.ts`, every test after the first rendered on top of the
+  previous test's still-mounted DOM. 12 new frontend tests, all passing;
+  `npm run typecheck`, `npm run lint`, and `npm run build` all still
+  clean.
+- **Backend**: 2 new regression tests proving a tool-call error and a
+  `degraded` status both survive real HTTP JSON serialization end to end
+  — the new frontend code reads `tool_calls[].result.error` and
+  `status === "degraded"` directly off the response, so this is the
+  actual contract it depends on, not just the in-process Python object.
+  227/227 backend tests passing, ruff/mypy clean.
+- **Docs**: `docs/AI_ANALYTICS.md` was a bigger gap than expected once
+  looked at closely — it described only the old `/ask` pipeline and
+  flatly claimed "there is no DuckDB and no generated SQL anywhere in
+  this codebase," which stopped being true the moment V2's NL-to-SQL
+  landed and was never corrected. Rewritten to cover all three AI paths
+  (`/analyze` current default, `/ask` deprecated, NL-to-SQL/SQL Explorer
+  provisional pending Phase 8 step 2's security audit), with an explicit,
+  honest note that `/analyze`'s system prompt hasn't had the same live
+  adversarial testing pass `/ask`'s did.
+- **Known, deliberate gap**: "Save insight"/"Add to dashboard" aren't
+  wired up for `/analyze` yet (see PHASES.md Phase 8, step 1 for why —
+  a schema mismatch, not an oversight).
+- **Not done**: no live browser click-through of the new page this round
+  (no browser-automation tool available in this environment) — verified
+  via component tests (mocked network boundary) and the backend's real
+  HTTP contract instead. Worth a manual click-through before calling this
+  fully shipped.
+- **Next up:** Phase 8, Step 2 — NL-to-SQL safety audit.
   genuine limitations logged in BUGS.md (frontend test suite, real R2
   credentials, etc.).

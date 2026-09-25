@@ -241,13 +241,29 @@ bullet must come from something actually measured; add a section to
 `docs/LEARNING.md` per step (what was built, why this approach over the
 alternatives, 3 interview questions to be ready for).
 
-- [ ] **Step 1 — Wire `/analyze` into the frontend.** Switch the AI
-      Analysis page from `/ask` to `/analyze`; surface the evidence behind
-      each answer (which tools ran, key numbers, the validator's verdict)
-      and a clear state when validation fails. Keep `/ask` behind a
-      feature flag, marked deprecated in docs — ask before deleting it.
-      Add frontend + end-to-end tests, including validator-failure and
-      tool-error cases.
+- [x] **Step 1 — Wire `/analyze` into the frontend.** AI Analysis page now
+      calls `/analyze` by default (`AnalyzeAnalystView`), showing which
+      tools ran, a per-finding verified/unverified indicator, the
+      validator's confidence downgrade, and clear degraded/warning/
+      tool-error banners. `/ask` kept fully working behind
+      `VITE_AI_ANALYST_ENGINE=ask` (`AskAnalystView`, unchanged), marked
+      deprecated in `docs/AI_ANALYTICS.md` — not deleted. Frontend test
+      stack added from scratch (Vitest + Testing Library + jsdom — none
+      existed before): 12 tests covering the empty state, a verified
+      finding, an unverified finding shown-not-hidden, the degraded
+      banner, a failed tool call surfaced, an API-error message, and
+      conversation history sent on a follow-up question. Backend gained 2
+      new regression tests proving a tool error and a `degraded` status
+      both survive real HTTP JSON serialization
+      (`test_analyze_surfaces_tool_error_and_degraded_status_over_http`),
+      since the new UI reads those fields directly off the response.
+      **Known gap, not worked around:** "Save insight"/"Add to dashboard"
+      aren't wired up for `/analyze` answers yet — `InsightCreate`/
+      `DashboardChartCreate` both require one `DatasetQueryRequest` +
+      `row_count`, and `/analyze` can run several tool calls of different
+      shapes (or none); faking a query from an arbitrary tool call would
+      be misleading. Revisit once there's a real shape for "save this
+      multi-tool analysis."
 - [ ] **Step 2 — NL-to-SQL safety audit.** Verify read-only execution,
       SELECT-only statement allow-list, scoping to the user's own dataset,
       row limit, query timeout, and rejection of multi-statement/injection

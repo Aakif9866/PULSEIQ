@@ -95,6 +95,7 @@ committed.
 | [`docs/BUGS.md`](docs/BUGS.md) | The full, dated issue tracker — every bug found, root cause, fix, and how it was re-verified |
 | [`docs/PHASES.md`](docs/PHASES.md) | The phased build plan this project followed |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | The dated build log |
+| [`docs/LEARNING.md`](docs/LEARNING.md) | Per-step design rationale and interview prep for the V2 completion plan |
 
 ## Testing & linting
 

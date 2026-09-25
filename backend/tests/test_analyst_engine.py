@@ -85,6 +85,33 @@ def test_run_analysis_calls_a_tool_then_produces_a_grounded_answer():
     assert response.findings[0].verified is True
 
 
+def test_run_analysis_surfaces_a_failed_tool_call_and_still_answers():
+    # tool_specs.call_tool() never raises — an unknown tool name (a model
+    # hallucinating one, or a bad argument) always becomes a
+    # {"error": "..."} result, fed straight back to the model as the tool
+    # message so it can adjust. The frontend's evidence panel (Phase 8,
+    # step 1) depends on that error surviving all the way through to
+    # tool_calls[].result — this is what it's testing against.
+    provider = _ScriptedProvider(
+        [
+            ProviderMessage(
+                content=None,
+                tool_calls=[ToolCall(id="1", name="not_a_real_tool", arguments={})],
+            ),
+            ProviderMessage(content=None, tool_calls=[]),
+            ProviderMessage(
+                content=_final_json("That analysis isn't available for this dataset.")
+            ),
+        ]
+    )
+
+    response = run_analysis(_df(), provider, "Do something unsupported.")
+
+    assert response.status == "ok"
+    assert response.tool_calls[0].tool == "not_a_real_tool"
+    assert response.tool_calls[0].result == {"error": "Unknown tool: not_a_real_tool"}
+
+
 def test_run_analysis_salvages_final_answer_returned_with_no_tool_calls():
     # Mirrors GroqProvider's own salvage path: a message that carries no
     # tool_calls but whose content IS already the complete final-answer

@@ -5,7 +5,7 @@ checks, request/response shape) without making a real Groq call, mirroring
 how tests/test_ai_analyst.py mocks analyst_service's collaborators.
 """
 from app.core.config import settings
-from app.schemas.analysis import AnalyzeResponse, Finding
+from app.schemas.analysis import AnalyzeResponse, Finding, ToolCallRecord
 
 
 def _signup_and_token(client, email: str) -> str:
@@ -67,6 +67,47 @@ def test_analyze_returns_grounded_response(client, monkeypatch):
     assert body["status"] == "ok"
     assert "3 rows" in body["answer"]
     assert body["findings"][0]["verified"] is True
+
+
+def test_analyze_surfaces_tool_error_and_degraded_status_over_http(client, monkeypatch):
+    # The frontend's evidence panel (docs/PHASES.md Phase 8, step 1) reads
+    # tool_calls[].result.error and status === "degraded" directly off the
+    # JSON response — this proves both survive real HTTP serialization,
+    # not just the in-process AnalyzeResponse object.
+    def _fake_degraded_with_tool_error(df, provider, question, conversation_history=None):
+        return AnalyzeResponse(
+            question=question,
+            answer="The AI provider did not return a usable response after retrying.",
+            findings=[],
+            tool_calls=[
+                ToolCallRecord(
+                    tool="detect_outliers",
+                    arguments={"column": "does_not_exist"},
+                    result={"error": "Column 'does_not_exist' not found."},
+                )
+            ],
+            status="degraded",
+        )
+
+    monkeypatch.setattr(settings, "AI_PROVIDER", "groq")
+    monkeypatch.setattr(
+        "app.services.deep_analysis_service.run_analysis", _fake_degraded_with_tool_error
+    )
+
+    token = _signup_and_token(client, "analyze-toolerror@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+
+    resp = client.post(
+        f"/api/v1/datasets/{dataset_id}/analyze",
+        headers=headers,
+        json={"question": "Find outliers in a column that doesn't exist."},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert body["tool_calls"][0]["result"]["error"] == "Column 'does_not_exist' not found."
 
 
 def test_analyze_returns_503_when_ai_disabled(client, monkeypatch):
