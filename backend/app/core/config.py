@@ -116,6 +116,15 @@ class Settings(BaseSettings):
     OTEL_EXPORTER_OTLP_HEADERS: str | None = None
     OTEL_SERVICE_NAME: str = "pulseiq-backend"
 
+    # --- Public demo account (Phase 8 step 6) — see app/workers/seed_demo.py ---
+    # Both unset = no demo account is created (the default everywhere
+    # except a deliberately public deployment). When set, the seeder runs
+    # at container start and (re)creates the account, a sample dataset,
+    # and a dashboard — idempotently, repairing anything a visitor
+    # deleted or a redeploy wiped.
+    DEMO_USER_EMAIL: str | None = None
+    DEMO_USER_PASSWORD: str | None = None
+
     # --- Analytics query safety (phase 3/4) ---
     QUERY_TIMEOUT_SECONDS: int = 10
     QUERY_ROW_LIMIT: int = 10_000

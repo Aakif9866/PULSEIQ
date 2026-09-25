@@ -593,3 +593,28 @@ short — what changed and what's next, not a full diff.
   sleeps in the provider tests (one test there was spending 0.67s
   genuinely asleep; the whole file now runs in 0.10s).
 - **Next up:** Phase 8, Step 6 — ship it.
+
+## 2026-09-25 (late night — Phase 8, Step 6 in progress)
+
+- **Decisions asked for and made by the account owner:** PR first,
+  merge once CI is green; stay on local-disk storage (R2 needs a
+  Cloudflare payment method on file); per-user AI quota of 30,000
+  tokens/day; a freshly generated public demo password.
+- **Demo seeder** (`app/workers/seed_demo.py`), run at every container
+  start. Idempotent, and it self-repairs the local-disk failure mode
+  where a redeploy wipes files but keeps their rows. 7 tests against
+  the real DB and storage. **Verified inside the real backend image**
+  (`docker build` plus a run against a DB whose demo files didn't exist
+  in the fresh container): it removed the broken dataset, re-uploaded,
+  re-added the chart, then the server started and `/health` returned
+  200 with the request id echoed.
+- **CI:** frontend tests added; a new evals job (harness tests,
+  byte-for-byte dataset determinism, ground truth for all 51 questions,
+  demo dataset matches eval dataset); a new Docker job building both
+  images; a separate manual live-evals workflow, so model quota is never
+  spent per push. Every new step was run locally, verbatim; GitHub
+  hasn't run them yet.
+- **Ownership, settled for Railway:** the project is in the workspace
+  "aakif9866's Projects", personal and matching the GitHub handle.
+- **Next:** you open the PR; once CI is green, set the three production
+  variables, merge, and verify the live deploy for real.

@@ -357,7 +357,8 @@ alternatives, 3 interview questions to be ready for).
       — the old test would have passed with no cap at all), provider
       fallback, quota exceeded, cache hit. 17 new backend tests (309
       total), 5 new frontend tests (24 total).
-- [ ] **Step 6 — Ship it.** Switch storage to Cloudflare R2 via the
+- [~] **Step 6 — Ship it** *(built and verified locally; production deploy pending the
+      V2 pull request — see docs/DEPLOYMENT.md "V2 release")*. Original scope: Switch storage to Cloudflare R2 via the
       existing `StorageProvider` (per `docs/STORAGE.md`); GitHub Actions CI
       running lint/typecheck/tests plus a fast eval subset on every PR;
       deploy backend + frontend (Render or similar) with Neon Postgres,

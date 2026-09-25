@@ -269,3 +269,79 @@ possible:
   environment to click through the UI itself.
 - (Resolved) The stray `joyful-quietude` Railway project has been
   deleted — see "Stray project (deleted)" above.
+
+---
+
+## V2 release (Phase 8 step 6)
+
+**Status: built and verified locally; production deploy pending the
+`feature/pulseiq-v2-roadmap` → `main` pull request.** This section gets
+a "verified on the real platform" list once that deploy happens —
+nothing below claims production verification that hasn't occurred.
+
+### Decisions (made by the account owner, 2026-09-25)
+
+| Question | Decision |
+|---|---|
+| How V2 reaches production | Pull request first, merge once CI is green (both services auto-deploy from `main`) |
+| Storage | **Stay on local disk.** R2 needs a Cloudflare account with a payment method on file; not worth it for a portfolio demo. The demo account self-repairs on every deploy (below); real users' uploads still vanish on redeploy — the same known limitation as V1 |
+| AI quota | `AI_DAILY_TOKEN_QUOTA_PER_USER=30000` — Groq's free tier gives the *whole account* 200,000 tokens/day, and measured questions cost ~3,000-7,000 tokens each |
+| Demo login | A new password, distinct from the local-dev one |
+
+### New production environment variables (backend service)
+
+| Variable | Value | Why |
+|---|---|---|
+| `AI_DAILY_TOKEN_QUOTA_PER_USER` | `30000` | Keeps one visitor from spending the whole account's daily Groq budget |
+| `DEMO_USER_EMAIL` | `demo@pulseiq.dev` | Enables the demo seeder |
+| `DEMO_USER_PASSWORD` | the public demo password (README) | Public by design — it's a demo |
+
+Optional, unset: `OTEL_EXPORTER_OTLP_ENDPOINT` (tracing),
+`GROQ_INPUT/OUTPUT_COST_PER_1M_TOKENS` (cost display).
+
+### The demo account and the local-disk problem
+
+Staying on local disk means every redeploy wipes uploaded files while
+their database rows survive — a dataset that *lists* fine and then fails
+to load. `app/workers/seed_demo.py` runs at every container start (after
+migrations, before the server; `|| true` so it can never block boot) and
+converges the demo account to a known-good state: user present with the
+configured password, exactly one *healthy* sample dataset (profiled
+**and** its file actually present), and a demo dashboard with a chart.
+Idempotent — a second run changes nothing.
+
+**Verified inside the real backend image**, not just in tests: built
+the image with `docker build`, ran it against a database whose demo
+rows pointed at files that didn't exist inside the fresh container —
+exactly the post-redeploy state. The seeder logged
+`demo_dataset_removed healthy=False`, re-uploaded and profiled a fresh
+copy, re-added the chart, and only then did uvicorn start; `GET
+/api/v1/health` returned `200` with the request id echoed.
+
+### Migrations
+
+The backend image's `CMD` runs `alembic upgrade head` on start, so the
+deploy applies migration `0009` (`ai_usage_log`, additive — no existing
+table altered) to Neon automatically. Neon is already at `0008`
+(applied during Phase 7). `0009` was verified upgrade → downgrade →
+upgrade on a throwaway database first.
+
+### CI (every push to `main` and every pull request)
+
+| Job | What it checks |
+|---|---|
+| Backend | ruff, mypy, `alembic upgrade head` on a real Postgres, pytest |
+| Frontend | oxlint, tsc, **vitest (new)**, production build |
+| **Evals (new)** | The eval harness's own tests; that the sample datasets regenerate byte-for-byte; that ground truth still computes for all 51 questions from the real `app.ai.tools`; that the bundled demo dataset still matches the eval dataset |
+| **Docker (new)** | Both images build — Railway builds these Dockerfiles straight from `main`, so a broken image should fail on the PR, not in production |
+
+Live-model evals are a separate, **manual** workflow
+(`.github/workflows/evals-live.yml`, needs a `GROQ_API_KEY` repository
+secret): a full run spends most of a day's free-tier quota, which would
+starve the deployed app if it ran on every push. Its inputs reach the
+shell through environment variables, never interpolated into the script
+(GitHub's documented script-injection guard).
+
+**Not yet verified:** CI itself has not run these new jobs on GitHub —
+every step was run locally, verbatim, and both workflow files parse; the
+PR is the first real run.

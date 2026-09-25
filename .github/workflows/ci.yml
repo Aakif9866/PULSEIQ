@@ -84,5 +84,78 @@ jobs:
       - name: Typecheck (tsc)
         run: npm run typecheck
 
+      - name: Test (vitest)
+        run: npm test
+
       - name: Build
         run: npm run build
+
+  evals:
+    # The "fast subset of evals on every PR" (docs/PHASES.md Phase 8 step
+    # 6) — everything in the eval harness that doesn't call a live model:
+    # the harness's own tests, that the sample datasets still regenerate
+    # byte-for-byte, and that every question's ground truth still computes
+    # from the real app.ai.tools. A tool whose output shape changes breaks
+    # this job instead of silently breaking the next live eval run. Live
+    # model evals are a separate, manual workflow (evals-live.yml) — they
+    # spend real, daily-capped API quota and aren't worth doing per push.
+    name: Evals (harness, determinism, ground truth)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements-dev.txt
+
+      - name: Lint (ruff)
+        working-directory: evals
+        run: ruff check .
+
+      - name: Harness tests
+        working-directory: evals
+        run: python -m pytest -q
+
+      - name: Sample datasets are deterministic
+        run: |
+          cp evals/datasets/ecommerce.csv /tmp/ecommerce.committed.csv
+          cp evals/datasets/employees.csv /tmp/employees.committed.csv
+          python evals/build_datasets.py
+          diff -q /tmp/ecommerce.committed.csv evals/datasets/ecommerce.csv
+          diff -q /tmp/employees.committed.csv evals/datasets/employees.csv
+
+      - name: Ground truth computes for every question
+        working-directory: evals
+        run: |
+          python -c "
+          import eval_questions as eq
+          n = len(eq.QUESTIONS)
+          assert n >= 50, n
+          missing = [q.id for q in eq.QUESTIONS if q.expected_value is None]
+          assert not missing, missing
+          print(f'{n} questions, ground truth computed for all')
+          "
+
+      - name: Demo dataset matches the eval dataset
+        run: diff -q evals/datasets/ecommerce.csv backend/app/workers/demo_data/pulseiq_demo_sales.csv
+
+  docker:
+    # Railway builds these Dockerfiles directly on every push to main —
+    # a broken image should fail here, on the PR, not in production.
+    name: Docker images build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t pulseiq-backend:ci backend
+
+      - name: Build frontend image
+        run: docker build -t pulseiq-frontend:ci frontend

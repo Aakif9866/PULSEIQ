@@ -27,4 +27,9 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD sh -c 'curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1'
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# The demo seeder (app/workers/seed_demo.py) is a no-op unless
+# DEMO_USER_EMAIL/DEMO_USER_PASSWORD are set. It runs after migrations
+# (it needs the tables) and before the server, and its `|| true` is
+# deliberate: a broken demo must never stop the API from booting, while a
+# failed migration still should.
+CMD ["sh", "-c", "alembic upgrade head && (python -m app.workers.seed_demo || true) && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
