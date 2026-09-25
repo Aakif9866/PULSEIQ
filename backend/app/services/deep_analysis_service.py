@@ -10,6 +10,7 @@ from app.analytics.loader import load_dataframe
 from app.core.config import settings
 from app.core.exceptions import AiNotConfiguredError, DatasetNotReadyError
 from app.core.logging import get_logger
+from app.core.tracing import get_tracer
 from app.repositories.dataset_repository import DatasetRepository
 from app.repositories.query_history_repository import QueryHistoryRepository
 from app.schemas.analysis import AnalyzeRequest, AnalyzeResponse
@@ -44,6 +45,18 @@ class DeepAnalysisService:
     def analyze(
         self, dataset_id: uuid.UUID, owner_id: uuid.UUID, payload: AnalyzeRequest
     ) -> AnalyzeResponse:
+        with get_tracer().start_as_current_span("analyze") as span:
+            span.set_attribute("pulseiq.dataset_id", str(dataset_id))
+            span.set_attribute("pulseiq.has_history", bool(payload.conversation_history))
+            response, cache_hit = self._analyze(dataset_id, owner_id, payload)
+            span.set_attribute("pulseiq.cache_hit", cache_hit)
+            span.set_attribute("pulseiq.analysis.status", response.status)
+            span.set_attribute("pulseiq.analysis.tool_calls", len(response.tool_calls))
+            return response
+
+    def _analyze(
+        self, dataset_id: uuid.UUID, owner_id: uuid.UUID, payload: AnalyzeRequest
+    ) -> tuple[AnalyzeResponse, bool]:
         if settings.AI_PROVIDER != "groq":
             raise AiNotConfiguredError()
 
@@ -69,7 +82,7 @@ class DeepAnalysisService:
                     owner_id=owner_id, dataset_id=dataset_id, source=_USAGE_SOURCE,
                     status=cached.status, cache_hit=True,
                 )
-                return cached
+                return cached, True
 
         # Checked only now — after the free cache path, before anything
         # that actually spends tokens.
@@ -130,4 +143,4 @@ class DeepAnalysisService:
         except Exception:  # noqa: BLE001 - logging must never break the response
             pass
 
-        return response
+        return response, False

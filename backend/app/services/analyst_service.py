@@ -10,6 +10,7 @@ from app.analytics.chart_suggestion import suggest_chart_type
 from app.analytics.loader import load_dataframe
 from app.analytics.sql_engine import execute_sql
 from app.analytics.sql_validator import validate_and_prepare
+from app.core.concurrency import submit_in_context
 from app.core.config import settings
 from app.core.exceptions import AiNotConfiguredError, DatasetNotReadyError, QueryTimeoutError
 from app.schemas.ai import AskResponse, AskSqlResponse
@@ -111,7 +112,7 @@ class AnalystService:
         )
 
     def _run_sql_bounded(self, df, sql: str) -> DatasetQueryResult:
-        future = _SQL_EXECUTOR.submit(execute_sql, df, sql)
+        future = submit_in_context(_SQL_EXECUTOR, execute_sql, df, sql)
         try:
             return future.result(timeout=settings.QUERY_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:

@@ -13,7 +13,6 @@ import json
 from typing import Any
 
 import polars as pl
-import pytest
 
 from app.ai.analyst_engine import _FALLBACK_MESSAGE, run_analysis
 from app.ai.providers.base import AIProvider, ProviderMessage, ToolCall
@@ -141,6 +140,39 @@ def test_run_analysis_falls_back_on_empty_response_with_exact_required_message()
     assert response.answer == _FALLBACK_MESSAGE
 
 
+def test_run_analysis_degrades_when_the_first_tool_loop_call_fails():
+    # BUG-017, found live: the provider failing on the FIRST call (inside
+    # the tool loop — e.g. Groq's daily rate limit) used to escape
+    # run_analysis entirely. Every existing fallback test failed on the
+    # final call instead, so this path was never exercised.
+    provider = _ScriptedProvider([AiResponseError("rate limited")])
+
+    response = run_analysis(_df(), provider, "How many rows?")
+
+    assert response.status == "degraded"
+    assert response.answer == _FALLBACK_MESSAGE
+    assert response.tool_calls == []
+
+
+def test_run_analysis_degrades_when_a_later_tool_loop_call_fails():
+    # Same bug, mid-loop: evidence already gathered must be kept on the
+    # degraded response, not thrown away.
+    provider = _ScriptedProvider(
+        [
+            ProviderMessage(
+                content=None,
+                tool_calls=[ToolCall(id="1", name="get_missing_values", arguments={})],
+            ),
+            AiResponseError("rate limited mid-analysis"),
+        ]
+    )
+
+    response = run_analysis(_df(), provider, "Any missing values?")
+
+    assert response.status == "degraded"
+    assert [tc.tool for tc in response.tool_calls] == ["get_missing_values"]
+
+
 def test_run_analysis_falls_back_on_unparseable_final_json():
     provider = _ScriptedProvider(
         [
@@ -188,19 +220,47 @@ def test_conversation_history_is_included_in_the_prompt():
     assert True
 
 
-@pytest.mark.parametrize("iteration_cap_hit", [True])
-def test_run_analysis_stops_after_max_tool_iterations(iteration_cap_hit):
-    # 6 tool-call rounds followed by a final call — never loops forever.
-    responses: list[ProviderMessage | Exception] = [
-        ProviderMessage(
-            content=None, tool_calls=[ToolCall(id=str(i), name="get_missing_values", arguments={})]
-        )
-        for i in range(6)
-    ]
-    responses.append(ProviderMessage(content=_final_json("Done."), tool_calls=[]))
-    provider = _ScriptedProvider(responses)
+class _NeverStopsProvider(AIProvider):
+    """A model that asks for another tool every single time tools are
+    offered, forever — the actual failure mode an iteration cap exists
+    for. Only answers when tools are withheld (the engine's final,
+    json_mode call)."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def chat(self, *, messages, tools=None, json_mode=False, temperature=0.1) -> ProviderMessage:
+        self.calls.append({"tools": tools is not None, "json_mode": json_mode})
+        if tools is not None:
+            n = len(self.calls)
+            return ProviderMessage(
+                content=None,
+                tool_calls=[ToolCall(id=str(n), name="get_missing_values", arguments={})],
+            )
+        return ProviderMessage(content=_final_json("Done."), tool_calls=[])
+
+
+def test_run_analysis_stops_after_max_tool_iterations(monkeypatch):
+    # Docs/PHASES.md Phase 8 step 5 asked for this explicitly. The previous
+    # version scripted exactly 6 tool rounds and then a final answer, so
+    # the *model* stopped on its own — it would have passed with no cap
+    # at all. This one never stops asking.
+    from app.ai import analyst_engine
+
+    warnings: list[str] = []
+    monkeypatch.setattr(
+        analyst_engine.logger, "warning", lambda event, **_: warnings.append(event)
+    )
+    provider = _NeverStopsProvider()
 
     response = run_analysis(_df(), provider, "Give me a complete executive analysis.")
 
+    cap = analyst_engine._MAX_TOOL_ITERATIONS
+    assert len(response.tool_calls) == cap
+    # Exactly `cap` tool-offering rounds, then exactly one final call with
+    # tools withheld — not one more round, and not a silent give-up.
+    assert len(provider.calls) == cap + 1
+    assert all(c["tools"] for c in provider.calls[:cap])
+    assert provider.calls[-1] == {"tools": False, "json_mode": True}
     assert response.status == "ok"
-    assert len(response.tool_calls) == 6
+    assert "analysis_hit_max_tool_iterations" in warnings

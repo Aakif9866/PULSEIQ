@@ -104,6 +104,18 @@ class Settings(BaseSettings):
     # so an existing deployment's behavior doesn't change underneath it.
     AI_DAILY_TOKEN_QUOTA_PER_USER: int | None = None
 
+    # --- Optional tracing (Phase 8 step 5) — see app/core/tracing.py ---
+    # Standard OpenTelemetry variable names, but read through Settings on
+    # purpose: pydantic-settings loads .env into Settings, NOT into
+    # os.environ, so the OTLP exporter reading os.environ itself would
+    # silently never see an endpoint configured in .env. Unset = tracing
+    # off entirely (a no-op tracer, nothing exported).
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    # "key1=value1,key2=value2" — e.g. an API-key header for a hosted
+    # backend. Never logged.
+    OTEL_EXPORTER_OTLP_HEADERS: str | None = None
+    OTEL_SERVICE_NAME: str = "pulseiq-backend"
+
     # --- Analytics query safety (phase 3/4) ---
     QUERY_TIMEOUT_SECONDS: int = 10
     QUERY_ROW_LIMIT: int = 10_000

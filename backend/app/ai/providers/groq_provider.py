@@ -28,10 +28,13 @@ import re
 import time
 from typing import Any
 
+from opentelemetry.trace import Status, StatusCode
+
 from app.ai.providers.base import AIProvider, ProviderMessage, ToolCall
 from app.core.config import settings
 from app.core.exceptions import AiResponseError
 from app.core.logging import get_logger
+from app.core.tracing import get_tracer
 
 logger = get_logger(__name__)
 
@@ -157,6 +160,50 @@ class GroqProvider(AIProvider):
         tools: list[dict[str, Any]] | None = None,
         json_mode: bool = False,
         temperature: float = 0.1,
+    ) -> ProviderMessage:
+        """One span + one log line per logical LLM call (retries included
+        inside it), inheriting the request's request_id/trace from
+        context. Records token counts and timing — never message
+        content, which contains the user's question and data."""
+        start = time.perf_counter()
+        with get_tracer().start_as_current_span("llm.chat") as span:
+            span.set_attribute("gen_ai.system", "groq")
+            span.set_attribute("gen_ai.request.model", settings.GROQ_MODEL)
+            span.set_attribute("pulseiq.llm.tools_offered", bool(tools))
+            span.set_attribute("pulseiq.llm.json_mode", json_mode)
+            try:
+                message = self._chat_with_retries(
+                    messages=messages, tools=tools, json_mode=json_mode, temperature=temperature
+                )
+            except AiResponseError as exc:
+                span.set_status(Status(StatusCode.ERROR, "exhausted retries"))
+                span.record_exception(exc)
+                raise
+            usage = message.usage or {}
+            for key, attr in (
+                ("prompt_tokens", "gen_ai.usage.input_tokens"),
+                ("completion_tokens", "gen_ai.usage.output_tokens"),
+            ):
+                if key in usage:
+                    span.set_attribute(attr, usage[key])
+            span.set_attribute("pulseiq.llm.tool_calls_requested", len(message.tool_calls))
+            logger.info(
+                "llm_call_completed",
+                model=settings.GROQ_MODEL,
+                duration_ms=round((time.perf_counter() - start) * 1000, 2),
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                tool_calls_requested=len(message.tool_calls),
+            )
+            return message
+
+    def _chat_with_retries(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        json_mode: bool,
+        temperature: float,
     ) -> ProviderMessage:
         from app.ai.groq_client import get_groq_client
 

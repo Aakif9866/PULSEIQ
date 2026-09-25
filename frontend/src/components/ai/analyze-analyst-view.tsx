@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ErrorReference } from '@/components/ui/error-reference'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -263,6 +264,7 @@ export function AnalyzeAnalystView() {
                     {analyze.error instanceof ApiError
                       ? analyze.error.message
                       : 'Something went wrong.'}
+                    <ErrorReference error={analyze.error} />
                   </p>
                 ))}
             </form>

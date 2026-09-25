@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/layout/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ErrorReference } from '@/components/ui/error-reference'
 import { useMyUsage } from '@/features/usage/api'
 import { ApiError } from '@/lib/api-client'
 import type { UsageSummary } from '@/types/usage'
@@ -67,6 +68,7 @@ export function UsagePage() {
         {error && (
           <p className="text-xs text-[var(--color-negative)]">
             {error instanceof ApiError ? error.message : "Couldn't load usage."}
+            <ErrorReference error={error} />
           </p>
         )}
 

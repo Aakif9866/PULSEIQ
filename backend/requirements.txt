@@ -32,3 +32,10 @@ httpx==0.28.1
 
 # Structured logging
 structlog==24.4.0
+
+# Optional tracing (Phase 8 step 5) — inert unless OTEL_EXPORTER_OTLP_ENDPOINT
+# is set; see app/core/tracing.py. Vendor-neutral OTLP, so it exports to
+# Jaeger, Grafana Tempo, Honeycomb, or LangSmith's OTLP endpoint alike.
+opentelemetry-api==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0

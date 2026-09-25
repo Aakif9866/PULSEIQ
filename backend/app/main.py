@@ -6,9 +6,11 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import DomainError
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import RequestLoggingMiddleware
+from app.core.middleware import REQUEST_ID_HEADER, RequestLoggingMiddleware
+from app.core.tracing import configure_tracing
 
 configure_logging(debug=settings.DEBUG)
+configure_tracing()
 logger = get_logger(__name__)
 
 app = FastAPI(
@@ -27,6 +29,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Browsers hide non-safelisted response headers from cross-origin JS
+    # unless they're exposed — without this, the deployed frontend (a
+    # different origin from the API) could never read the request id it
+    # shows users as an error reference.
+    expose_headers=[REQUEST_ID_HEADER],
 )
 
 

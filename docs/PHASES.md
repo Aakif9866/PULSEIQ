@@ -335,11 +335,28 @@ alternatives, 3 interview questions to be ready for).
       `AI_ANALYTICS.md` records the n=3 spot measurements that do exist,
       labeled as such). 42 new backend tests (292 total), 7 new frontend
       tests (19 total).
-- [ ] **Step 5 — Observability and reliability.** Structured logging with
-      request IDs threaded frontend → backend → tools → LLM; optional
-      tracing (LangSmith or OpenTelemetry) via env vars; tests for max
-      tool-loop iterations reached, provider fallback, quota exceeded,
-      cache hit.
+- [x] **Step 5 — Observability and reliability.** Request IDs now thread
+      frontend → backend → tools → LLM: the frontend sends a fresh
+      `X-Request-ID` on every call and shows it as a quotable "Reference"
+      on errors; the backend honors it (validated — a malformed or
+      log-injection-shaped id is replaced, never trusted), and every log
+      line for that request — each tool call, each LLM call — carries it.
+      Three real gaps found live and fixed along the way: an inbound id was
+      ignored; an unhandled 500 carried no request id (BUG-018); and
+      thread-pool work (`ThreadPoolExecutor.submit`) dropped the request's
+      contextvars, which would have orphaned any log line or span inside
+      it (`app/core/concurrency.py`). Optional OpenTelemetry tracing
+      (vendor-neutral OTLP, chosen over LangSmith) via
+      `OTEL_EXPORTER_OTLP_ENDPOINT` — off by default. Verified live
+      against a real local OTLP receiver decoding the actual protobuf
+      export: one request, one trace, HTTP → analyze → LLM/tool spans,
+      same trace id as the logs. **That live check found BUG-017**:
+      `/analyze` returned a misleading 400 when Groq failed on the first
+      (tool-loop) call — fixed, and re-verified live as a degraded 200.
+      Tests for the four named cases: max tool-loop iterations (rewritten
+      — the old test would have passed with no cap at all), provider
+      fallback, quota exceeded, cache hit. 17 new backend tests (309
+      total), 5 new frontend tests (24 total).
 - [ ] **Step 6 — Ship it.** Switch storage to Cloudflare R2 via the
       existing `StorageProvider` (per `docs/STORAGE.md`); GitHub Actions CI
       running lint/typecheck/tests plus a fast eval subset on every PR;

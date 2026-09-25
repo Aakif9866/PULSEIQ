@@ -110,6 +110,15 @@ def analyze_dataset(
             status_code=status.HTTP_409_CONFLICT,
             detail="This dataset isn't ready to analyze yet (profiling hasn't succeeded).",
         ) from exc
+    except AiResponseError as exc:
+        # run_analysis turns provider failures into a degraded 200 itself
+        # (BUG-017 fixed that for the tool loop); this is the backstop so
+        # an AiResponseError from any other path is an honest 502, never
+        # the generic 400 main.py's DomainError fallback would produce.
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc) or "The AI analyst is temporarily unavailable. Try again.",
+        ) from exc
 
 
 @router.post("/{dataset_id}/ask-sql", response_model=AskSqlResponse)

@@ -2,13 +2,13 @@
 
 ## Summary
 
-Total Issues Found: 16 (running total — updated as testing proceeds;
-BUG-013 through BUG-016 were found during docs/PHASES.md Phase 8, in
+Total Issues Found: 18 (running total — updated as testing proceeds;
+BUG-013 through BUG-018 were found during docs/PHASES.md Phase 8, in
 sessions well after the original QA pass below — see each entry)
 
 Critical: 1
-High: 7
-Medium: 8
+High: 8
+Medium: 9
 Low: 0
 
 **A note on scope and honesty:** this environment has no browser-automation
@@ -1374,6 +1374,102 @@ correctly, correct answer produced). Tests:
 `test_every_optional_property_schema_allows_null`,
 `test_call_tool_treats_an_explicit_null_argument_as_omitted`,
 `test_call_tool_falls_back_to_the_real_default_when_null_is_passed`.
+
+---
+
+## BUG-017 — `/analyze` returned a misleading 400 when the AI provider failed on its first call
+
+**Severity:** High
+
+**Area:** Backend / Hybrid AI Analyst
+
+**Status:** FIXED
+
+### Description
+
+Found live during the Phase 8 step 5 tracing verification: a real
+request to `/analyze` while Groq's daily token cap was exhausted
+returned `400 {"detail": "The request could not be completed."}` — a
+client-error status for a server-side outage, with a message that told
+the user nothing. The route's own docstring promised a degraded-but-200
+response when the AI service returns something unusable.
+
+### Root Cause
+
+`run_analysis` guarded only the *final* LLM call with `except
+AiResponseError`. The first call — inside the tool-calling loop — was
+unguarded, so a provider failure there escaped the engine. The `/analyze`
+route (unlike `/ask` and `/ask-sql`) had no `AiResponseError` handler, so
+it fell through to `main.py`'s generic `DomainError` fallback: a 400.
+Never caught by a test because every existing fallback test made the
+provider fail on the *final* call, never the first.
+
+### Fix Applied
+
+The tool-loop call is now guarded exactly like the final one, returning
+the designed degraded response (keeping any evidence already gathered).
+The `/analyze` route also gained the same `AiResponseError → 502` handler
+the other two AI routes already had, as a backstop.
+
+### Verification
+
+Reproduced live (the exact 400 above, with the real exhausted quota);
+tests added that **fail with the fix reverted and pass with it
+restored** — checked both directions:
+`test_run_analysis_degrades_when_the_first_tool_loop_call_fails`,
+`test_run_analysis_degrades_when_a_later_tool_loop_call_fails`, and an
+over-HTTP reproduction,
+`test_provider_failure_on_the_first_call_is_a_degraded_200_not_a_400`.
+Re-verified live after the fix: the same request returns 200,
+`status: "degraded"`, the designed fallback message, and a trace showing
+the LLM span in error while the request itself succeeded.
+
+---
+
+## BUG-018 — Server errors (500) carried no request id, in the response or the log line
+
+**Severity:** Medium
+
+**Area:** Backend / Observability
+
+**Status:** FIXED
+
+### Description
+
+`docs/PHASES.md` Phase 6 said every request's id is "echoed back as an
+`X-Request-ID` response header". Verified live in Phase 8 step 5: true
+for successes and handled errors, **false for an unhandled 500** — the
+one response a user most needs a reference id for. Worse, the log line
+recording the actual error (`unhandled_exception`) carried no
+`request_id` either, so even with an id in hand there was nothing to
+find.
+
+### Root Cause
+
+An unhandled exception escaped `RequestLoggingMiddleware` (which set the
+header only on its success branch) up to Starlette's outermost error
+layer. That layer's handler both built the 500 response (no header) and
+logged the error — *after* the middleware had already cleared the
+request's logging context.
+
+### Fix Applied
+
+The middleware now produces the 500 itself while the request's context
+is still bound: same generic body as before (no internals leaked), plus
+the `X-Request-ID` header and a `request_id` field; the error is logged
+with a stack trace and the request id. Also added: honoring a
+well-formed inbound `X-Request-ID` (validated against
+`^[A-Za-z0-9._-]{1,128}$` — anything else, e.g. a newline log-injection
+attempt, is replaced, never trusted), and exposing the header to
+cross-origin browser JavaScript via CORS `expose_headers`.
+
+### Verification
+
+Reproduced with a test route that raises (500 with no header, before);
+`test_an_unhandled_500_now_carries_the_request_id`,
+`test_the_500_error_log_line_carries_the_request_id`,
+`test_a_malformed_inbound_request_id_is_replaced_not_trusted`,
+`test_request_id_header_is_exposed_to_cross_origin_browser_js`.
 
 ---
 

@@ -194,6 +194,21 @@ describe('AnalyzeAnalystView', () => {
     expect(await screen.findByText('AI features are not configured.')).toBeInTheDocument()
   })
 
+  it('shows the request id as a quotable reference on a server error', async () => {
+    const { ApiError } = await vi.importActual<typeof import('@/lib/api-client')>(
+      '@/lib/api-client',
+    )
+    vi.mocked(apiClient.post).mockRejectedValue(
+      new ApiError(500, 'Something went wrong on our end.', undefined, 'req-abc-123'),
+    )
+
+    renderWithProviders()
+    await askQuestion('Anything?')
+
+    expect(await screen.findByText('req-abc-123')).toBeInTheDocument()
+    expect(screen.getByText(/Reference:/)).toBeInTheDocument()
+  })
+
   it('shows a distinct quota message with a link to usage on a 429', async () => {
     const { ApiError } = await vi.importActual<typeof import('@/lib/api-client')>(
       '@/lib/api-client',

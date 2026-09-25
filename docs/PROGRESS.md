@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1, 2, 4 done; Step 3 built, full run pending quota |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1, 2, 4, 5 done; Step 3 built, full run pending quota |
 
 ## Known issues
 
@@ -541,3 +541,55 @@ short — what changed and what's next, not a full diff.
 - **Tests:** 42 new backend tests (292/292), 7 new frontend tests
   (19/19); ruff, mypy, typecheck, lint, and build all clean.
 - **Next up:** Phase 8, Step 5 — observability and reliability.
+
+## 2026-09-25 (night — Phase 8, Step 5 done)
+
+- **Checked what existed first.** Per-request `request_id` binding and an
+  `X-Request-ID` echo already existed (Phase 6). Then verified the claims
+  instead of trusting them, and found three real gaps:
+  1. An inbound `X-Request-ID` was ignored, so there was no shared id
+     between a browser error and its server log lines.
+  2. An unhandled 500 carried no `X-Request-ID`, and the log line holding
+     the actual error carried no `request_id` either (BUG-018). The
+     exception escaped the middleware to Starlette's outermost handler,
+     which logs after the request's context is already cleared.
+  3. `ThreadPoolExecutor.submit()` doesn't copy contextvars: confirmed
+     with a direct probe (`{}` inside the worker). Nothing logs inside
+     those workers today, but any span or log line added there later
+     would silently lose its request.
+- **Fixed all three:** inbound ids honored when well-formed (validated,
+  so newline-injection-shaped or oversized ids are replaced); the
+  middleware now builds the 500 itself while the context is bound (same
+  generic body, plus the id); `submit_in_context()` used at all three
+  submit sites; CORS `expose_headers` so the deployed frontend on another
+  origin can actually read the id.
+- **Frontend:** every request sends a fresh id (with a
+  `getRandomValues` fallback for plain-http contexts where
+  `crypto.randomUUID` doesn't exist); `ApiError` carries the server's
+  echoed id; errors show it as a quotable "Reference".
+- **Tool and LLM log lines:** `tool_call_completed` and
+  `llm_call_completed` (tokens and timing, never message content), both
+  inheriting the request's id.
+- **Optional OpenTelemetry tracing**, off unless
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is set. Read through Settings rather than
+  `os.environ`, since pydantic-settings never puts `.env` values into
+  `os.environ` and the exporter would otherwise silently never see it.
+- **Live verification:** ran a small OTLP receiver that decodes the real
+  protobuf export, started the real backend pointed at it, and sent one
+  request with `X-Request-ID: live-e2e-1`. Result: the id echoed, every
+  log line carried it plus one shared `trace_id`, and the receiver got
+  the matching trace (HTTP → analyze → llm.chat). **It also exposed
+  BUG-017:** Groq's quota was still exhausted, and `/analyze` answered
+  `400 "The request could not be completed."`, because only the final
+  LLM call was guarded and a failure on the first (tool-loop) call
+  escaped the engine. Fixed; the new tests fail with the fix reverted
+  and pass with it restored; re-verified live as a degraded 200.
+- **Max-iterations test rewritten:** the old one scripted exactly 6 tool
+  rounds and then an answer, so the *model* stopped by itself; it would
+  have passed with no cap at all. The new one uses a model that never
+  stops asking for tools.
+- **Tests:** 309/309 backend (17 new), 24/24 frontend (5 new); ruff,
+  mypy, typecheck, lint, build clean. Also stubbed out real backoff
+  sleeps in the provider tests (one test there was spending 0.67s
+  genuinely asleep; the whole file now runs in 0.10s).
+- **Next up:** Phase 8, Step 6 — ship it.

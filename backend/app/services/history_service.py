@@ -8,6 +8,7 @@ from app.analytics.loader import load_dataframe
 from app.analytics.sql_engine import execute_sql
 from app.analytics.sql_validator import validate_and_prepare
 from app.analytics.suggested_queries import build_suggested_queries
+from app.core.concurrency import submit_in_context
 from app.core.config import settings
 from app.core.exceptions import (
     DatasetNotFoundError,
@@ -61,7 +62,7 @@ class HistoryService:
             row_limit=settings.QUERY_ROW_LIMIT,
         )
 
-        future = _SQL_EXECUTOR.submit(execute_sql, df, safe_sql)
+        future = submit_in_context(_SQL_EXECUTOR, execute_sql, df, safe_sql)
         try:
             result = future.result(timeout=settings.QUERY_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:

@@ -182,6 +182,17 @@ doesn't mean neither exists, only that the specific attempts made here
   this project.
 - The R2 misconfiguration error names *which* environment variables are
   missing, never their values.
+- **A client-supplied `X-Request-ID` is validated before it touches a log
+  line or a response header** (`app/core/middleware.py`, Phase 8 step
+  5): only `^[A-Za-z0-9._-]{1,128}$` is accepted; anything else — a
+  newline log-injection attempt, header-splitting characters, an
+  oversized value — is replaced with a fresh server-generated id rather
+  than rejected, so correlation degrades but the request still succeeds.
+- **Traces never carry user content.** Optional OpenTelemetry spans
+  (off by default) record token counts, timings, tool names, and tool
+  argument *names* — never LLM message content or argument values, which
+  contain users' questions and data. The OTLP auth header
+  (`OTEL_EXPORTER_OTLP_HEADERS`) is never logged.
 
 ## CORS
 

@@ -12,6 +12,14 @@ from app.ai.providers.groq_provider import GroqProvider
 from app.core.exceptions import AiResponseError
 
 
+@pytest.fixture(autouse=True)
+def _no_real_backoff_sleep(monkeypatch):
+    """Retries now genuinely back off (Phase 8 step 4). Tests that care
+    about the delay re-patch this with a recorder; every other test would
+    otherwise really sleep between retries for no reason."""
+    monkeypatch.setattr("app.ai.providers.groq_provider.time.sleep", lambda _s: None)
+
+
 class _FakeToolCallFunction:
     def __init__(self, name: str, arguments: str) -> None:
         self.name = name

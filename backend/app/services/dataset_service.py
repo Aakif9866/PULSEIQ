@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.analytics.loader import load_dataframe
 from app.analytics.profiling import profile_dataframe
 from app.analytics.query_engine import run_query as _run_query
+from app.core.concurrency import submit_in_context
 from app.core.config import settings
 from app.core.exceptions import (
     DatasetNotFoundError,
@@ -136,7 +137,9 @@ class DatasetService:
             raise DatasetNotReadyError(dataset.status)
 
         df = load_dataframe(self._storage, dataset)
-        future = _QUERY_EXECUTOR.submit(_run_query, df, request, row_limit=settings.QUERY_ROW_LIMIT)
+        future = submit_in_context(
+            _QUERY_EXECUTOR, _run_query, df, request, row_limit=settings.QUERY_ROW_LIMIT
+        )
         try:
             return future.result(timeout=settings.QUERY_TIMEOUT_SECONDS)
         except FutureTimeoutError as exc:

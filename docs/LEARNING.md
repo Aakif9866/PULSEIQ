@@ -399,3 +399,94 @@ showing it saves tokens, it would be complexity with an unknown sign.
    don't add their own tokens yet. Be honest that this is a known
    under-count, and say how you'd fix it: route them through the
    provider abstraction.
+
+---
+
+## Step 5 — Observability and reliability
+
+### What was built
+
+End-to-end request correlation: the frontend sends an `X-Request-ID`
+with every call, the backend honors it (after validating it), and every
+log line and trace span for that request, down to each tool call and
+LLM call, carries the same id. It's shown to users as a quotable
+"Reference" on errors. Optional OpenTelemetry tracing turns each request
+into one trace (HTTP → analyze → LLM and tool spans), enabled by a
+single env var. Three latent correlation gaps were found and fixed along
+the way, and a live check of the tracing surfaced a real user-facing bug
+(BUG-017) in how `/analyze` handled provider outages.
+
+### Why this approach over the alternatives
+
+**Verifying the existing claim instead of building on it.** Request IDs
+"already existed" per the Phase 6 docs. Probing them directly showed
+they failed exactly where they matter most: an unhandled 500 carried no
+id, and the error's own log line had none either. The lesson is the same
+as Step 2's: a docstring or a phase note describes intent, and only
+running it shows what actually happens.
+
+**Producing the 500 inside the middleware.** The alternative was a
+custom exception handler that re-reads the id from somewhere. But by the
+time Starlette's outermost handler runs, the request's context has
+already been torn down, so there's nothing left to read. Handling the
+exception where the context is still alive is the only place that
+works, and it also puts the error inside the CORS middleware, so a
+browser can actually read a 500 cross-origin.
+
+**Validating, not trusting, an inbound request id.** A client-controlled
+string that goes straight into log lines and a response header is an
+injection vector: newlines forge log entries, and control characters
+can split headers. It's accepted only if it's short and boring
+(`^[A-Za-z0-9._-]{1,128}$`) and otherwise replaced with a fresh id. It's
+replaced rather than rejected because a bad correlation id should never
+fail the real request.
+
+**`copy_context().run` for thread pools.** `ThreadPoolExecutor.submit`
+doesn't propagate contextvars, and both structlog's request fields and
+OpenTelemetry's current span live there. Wrapping submission once, in
+one helper used at every call site, fixes logs and spans together.
+Fixing it was cheap before anything logged in those workers; debugging
+it after would not have been.
+
+**OpenTelemetry over LangSmith.** OTLP is a vendor-neutral standard. The
+same configuration exports to Jaeger, Grafana Tempo, Honeycomb, or
+LangSmith's own OTLP endpoint. The LangSmith SDK is built around
+LangChain, which this project doesn't use.
+
+**A private TracerProvider instead of the global one.** OpenTelemetry's
+global provider can only be set once per process, which would make it
+impossible for tests to swap in an in-memory exporter. Span parenting
+goes through the context API regardless of which provider made the span,
+so nothing is lost.
+
+**Settings, not `os.environ`, for the OTLP endpoint.** The exporter
+normally reads its endpoint from `os.environ`, but pydantic-settings
+loads `.env` into the Settings object, not the environment. An endpoint
+set in `.env` would have been silently ignored: tracing "configured" and
+nothing ever exported.
+
+**Recording token counts and argument names, never content.** Spans
+leave the process for a third-party backend. Messages contain users'
+questions and data values, so they stay out; token counts, timings, tool
+names, and argument *names* are enough to debug with.
+
+### Interview questions to be ready for
+
+1. **"How would you find out why one specific user's request failed?"**
+   Walk through the chain concretely: the error shows a Reference id,
+   that same id is on every backend log line for the request (including
+   each tool and LLM call, with retries and backoff delays), and on the
+   root span of its trace. Mention the two places that silently broke
+   this before the fix (500s, and thread-pool workers) and how each was
+   verified.
+2. **"Your live tracing check found a bug. What was it, and why hadn't
+   your tests caught it?"** Explain BUG-017: only the final LLM call was
+   guarded, so a provider failure on the first call escaped and became a
+   generic 400. Every fallback test happened to fail on the final call.
+   Then say how you proved the new tests are real: they fail with the fix
+   reverted and pass with it restored.
+3. **"Why validate a request id? It's just a string."** Name the concrete
+   risks: log injection (a newline forges an entry), header splitting,
+   and multi-KB values bloating every log line. Explain the choice to
+   replace rather than reject, so correlation degrades gracefully while
+   the real request still succeeds.

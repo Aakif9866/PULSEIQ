@@ -12,9 +12,11 @@ results back to the model, and turning its final structured response
 into a validated AnalyzeResponse.
 """
 import json
+import time
 from typing import Any
 
 import polars as pl
+from opentelemetry.trace import Status, StatusCode
 from pydantic import ValidationError
 
 from app.ai.answer_validator import validate_findings
@@ -22,6 +24,7 @@ from app.ai.providers.base import AIProvider
 from app.ai.tool_specs import TOOL_SPECS, call_tool
 from app.core.exceptions import AiResponseError
 from app.core.logging import get_logger
+from app.core.tracing import get_tracer
 from app.schemas.analysis import AnalyzeResponse, ConversationTurn, Finding, ToolCallRecord
 
 logger = get_logger(__name__)
@@ -88,6 +91,30 @@ _FALLBACK_MESSAGE = (
     "response. Your dataset was loaded successfully and the computations that did run are "
     "shown below. Please retry."
 )
+
+
+def _traced_tool_call(name: str, df: pl.DataFrame, arguments: dict[str, Any]) -> dict[str, Any]:
+    """One span and one log line per tool call — both inherit the
+    request's request_id/trace from context, so a single request can be
+    followed from the HTTP layer through every tool it triggered.
+    Argument *names* are recorded, never values: a filter value is the
+    user's own data."""
+    start = time.perf_counter()
+    with get_tracer().start_as_current_span(f"tool.{name}") as span:
+        span.set_attribute("pulseiq.tool.name", name)
+        span.set_attribute("pulseiq.tool.argument_names", sorted(arguments))
+        result = call_tool(name, df, arguments)
+        error = result.get("error") if isinstance(result, dict) else None
+        if error:
+            span.set_status(Status(StatusCode.ERROR, str(error)[:200]))
+        duration_ms = round((time.perf_counter() - start) * 1000, 2)
+        logger.info(
+            "tool_call_completed",
+            tool=name,
+            duration_ms=duration_ms,
+            failed=bool(error),
+        )
+        return result
 
 
 def _column_overview(df: pl.DataFrame) -> str:
@@ -159,7 +186,17 @@ def run_analysis(
         # real tool call" or "stop gathering evidence" — but its
         # plain-text content is checked below in case it's actually a
         # salvaged final answer, rather than always re-asked for.
-        message = provider.chat(messages=messages, tools=TOOL_SPECS, temperature=0.1)
+        #
+        # Guarded exactly like the final call below. Found live (Phase 8
+        # step 5, docs/BUGS.md BUG-017): only the final call used to be
+        # guarded, so a provider failure on *this* call — Groq's daily
+        # rate limit, in the case that found it — escaped run_analysis
+        # entirely, and the route turned it into a generic 400 "request
+        # could not be completed" instead of the designed degraded answer.
+        try:
+            message = provider.chat(messages=messages, tools=TOOL_SPECS, temperature=0.1)
+        except AiResponseError:
+            return _fallback_response(question, tool_records)
 
         if not message.tool_calls:
             tools_exhausted = False
@@ -182,7 +219,7 @@ def run_analysis(
             }
         )
         for tc in message.tool_calls:
-            result = call_tool(tc.name, df, tc.arguments)
+            result = _traced_tool_call(tc.name, df, tc.arguments)
             tool_records.append(
                 ToolCallRecord(tool=tc.name, arguments=tc.arguments, result=result)
             )
