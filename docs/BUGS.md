@@ -2,11 +2,13 @@
 
 ## Summary
 
-Total Issues Found: 12 (running total — updated as testing proceeds)
+Total Issues Found: 16 (running total — updated as testing proceeds;
+BUG-013 through BUG-016 were found during docs/PHASES.md Phase 8, in
+sessions well after the original QA pass below — see each entry)
 
 Critical: 1
-High: 5
-Medium: 6
+High: 7
+Medium: 8
 Low: 0
 
 **A note on scope and honesty:** this environment has no browser-automation
@@ -18,18 +20,28 @@ code. Frontend findings are from careful code review of every page/component
 myself; those are labeled "code review" rather than "tested" throughout, per
 the instruction not to claim interactive testing that didn't happen.
 
-**Architecture note, relevant to several sections of the QA brief:** PulseIQ
-does not use DuckDB or generate SQL anywhere. The actual pipeline is:
-question → Groq (JSON mode) → a `DatasetQueryRequest` (a closed Pydantic
-schema: group_by/aggregations/filters/sort/limit, column names validated
-against the real schema) → executed via Polars → result → Groq again for a
-plain-language summary. `duckdb` is in `requirements.txt` but unused in
-`app/` — reserved, per the code's own comments, for if/when free-form SQL is
-ever needed. This means "SQL injection" and "generated SQL" sections of the
-brief don't map onto a real attack surface here (there is no SQL, generated
-or otherwise) — instead I tested the analogous risk: can a question or
-injected dataset content make the AI produce a mutating action or leak
-config? See BUG entries under AI/Security below.
+**Architecture note, relevant to several sections of the QA brief (true at
+the time this QA pass was run — see the correction immediately after):**
+PulseIQ does not use DuckDB or generate SQL anywhere. The actual pipeline
+is: question → Groq (JSON mode) → a `DatasetQueryRequest` (a closed
+Pydantic schema: group_by/aggregations/filters/sort/limit, column names
+validated against the real schema) → executed via Polars → result → Groq
+again for a plain-language summary. `duckdb` is in `requirements.txt` but
+unused in `app/` — reserved, per the code's own comments, for if/when
+free-form SQL is ever needed. This means "SQL injection" and "generated
+SQL" sections of the brief don't map onto a real attack surface here
+(there is no SQL, generated or otherwise) — instead I tested the
+analogous risk: can a question or injected dataset content make the AI
+produce a mutating action or leak config? See BUG entries under
+AI/Security below.
+
+**Correction (docs/PHASES.md Phase 8, step 2):** the paragraph above
+stopped being true once V2's Natural Language to SQL and SQL Explorer
+shipped — DuckDB is now a real, in-process execution engine, and real
+generated SQL exists (`app/analytics/sql_validator.py`,
+`sql_engine.py`). That path was audited directly, with two real bypasses
+found and fixed — see BUG-014 and BUG-015 below, and the full model in
+`docs/SECURITY.md`.
 
 ---
 
@@ -1120,6 +1132,248 @@ doesn't repeat the mistake.
   `railway api` (`projectDelete`), confirmed gone from `railway project
   list`. Its failing `joyful-quietude - PULSEIQ` check will no longer
   appear on future commits.
+
+---
+
+## BUG-013 — `GET /history` 500'd for any user who had ever used the AI Analyst
+
+**Severity:** High
+
+**Area:** Backend / Query History / Hybrid AI Analyst
+
+**Status:** FIXED
+
+### Description
+
+Found while pre-creating a demo account and driving every feature of the
+app through its real HTTP API end-to-end (not unit tests) to verify it
+genuinely worked. `DeepAnalysisService.analyze()` (the hybrid AI
+Analyst, `POST /datasets/{id}/analyze`) logs every call to
+`query_history` with `source="ai_deep_analysis"` — but
+`QueryHistoryRead`'s `QuerySource` `Literal` type only listed
+`"ai_sql" | "sql_explorer" | "ai_structured"`. The write succeeded (a
+plain `String(32)` column, no DB-level constraint); the *read* back out
+through the Pydantic response model failed validation on every request
+from that point on.
+
+### Steps to Reproduce
+
+1. Ask the AI Analyst (`/analyze`) any question on a real dataset.
+2. Call `GET /history`.
+
+### Actual Behavior
+
+`500 {"detail":"Something went wrong on our end. Please try again."}` —
+every time, for that user, from then on, regardless of what else was in
+their history.
+
+### Root Cause
+
+`QuerySource` (`app/schemas/history.py`) was never updated when the
+hybrid AI Analyst was added — a schema/writer mismatch, not a logic bug.
+
+### Fix Applied
+
+Added `"ai_deep_analysis"` to the `QuerySource` `Literal`. No migration
+needed (plain string column).
+
+### Verification
+
+Reproduced live against a running local instance (real signup, real
+`/analyze` call, real subsequent `GET /history` 500), fixed, and
+re-verified the same sequence returns `200` with the entry listed.
+Regression test:
+`tests/test_history.py::test_analyze_logs_to_history_and_history_lists_it`.
+
+---
+
+## BUG-014 — SQL Explorer / NL-to-SQL: bare function calls were never validated
+
+**Severity:** High
+
+**Area:** Backend / Natural Language to SQL / Security
+
+**Status:** FIXED
+
+### Description
+
+Found during a deliberate security audit (docs/PHASES.md Phase 8 step
+2) of `app/analytics/sql_validator.py`, by attacking the real validator
+with live payloads rather than reading the code. The validator checked
+every `exp.Table` and `exp.Column` node in the parsed SQL AST — but
+never looked at a bare function call, which is neither. `SELECT
+version() FROM dataset` and `SELECT current_database() FROM dataset`
+both passed validation and DuckDB executed them for real, returning the
+actual engine version and in-memory database name.
+
+### Steps to Reproduce
+
+```python
+validate_and_prepare(
+    "SELECT version() FROM dataset",
+    table_name="dataset", allowed_columns={"order_id"}, row_limit=100,
+)
+# -> returns the SQL unchanged, validation raises nothing
+```
+
+### Expected Behavior
+
+Only the registered dataset's real columns and standard SQL
+aggregate/string/date/math functions should ever reach execution.
+
+### Actual Behavior
+
+DuckDB executed the function and returned real engine/database
+information neither the model nor a user should be able to query for.
+
+### Root Cause
+
+No check anywhere in the validator ever inspected function-call nodes —
+a category of AST node the original design didn't account for, not a
+broken check.
+
+### Fix Applied
+
+`_validate_functions()` rejects any `exp.Anonymous` node — sqlglot maps
+every standard SQL function (`SUM`, `LOWER`, `CASE`, `COALESCE`,
+`EXTRACT`, ...) to its own named expression class, and falls back to
+the generic `Anonymous` for anything it doesn't recognize, which
+covered every non-standard function tried (`version`, `current_database`,
+`current_setting`, `read_text`) with no hand-maintained allowlist
+needed. Also added `enable_external_access=false` on the DuckDB
+connection itself (`app/analytics/sql_engine.py`) as an independent
+second layer.
+
+### Regression Risk
+
+Low — verified standard aggregate/string/date/math functions
+(`SUM`, `COUNT`, `UPPER`, `ROUND`, `CASE`, `COALESCE`) still pass.
+
+### Verification
+
+Reproduced live against the real validator/engine before the fix (both
+`version()` and `current_database()` executed successfully); fixed;
+re-verified the same payloads are now rejected with `Function not
+allowed: ...`, and that `enable_external_access=false` independently
+blocks `read_csv(...)` even calling `execute_sql()` directly with SQL
+that never passed through the validator at all. Full write-up:
+`docs/SECURITY.md`. Tests:
+`tests/test_sql_validator.py::test_unrecognized_function_calls_are_rejected`,
+`tests/test_sql_engine.py::test_execute_sql_blocks_filesystem_access_even_if_validation_is_bypassed`.
+
+---
+
+## BUG-015 — SQL Explorer / NL-to-SQL: an oversized `LIMIT` bypassed the row cap
+
+**Severity:** Medium
+
+**Area:** Backend / Natural Language to SQL / Security
+
+**Status:** FIXED
+
+### Description
+
+Found in the same audit as BUG-014. The validator only ever *injected*
+a `LIMIT` when the query had none at all — a query that already
+specified its own, however large, was never clamped.
+
+### Steps to Reproduce
+
+```python
+validate_and_prepare(
+    "SELECT * FROM dataset LIMIT 999999999",
+    table_name="dataset", allowed_columns={...}, row_limit=100,
+)
+# -> "SELECT * FROM dataset LIMIT 999999999" — unchanged
+```
+
+### Root Cause
+
+`if stmt.args.get("limit") is None: stmt = stmt.limit(row_limit)` only
+covered the absent case.
+
+### Fix Applied
+
+Always clamp to `min(requested, row_limit)`; a non-literal `LIMIT`
+expression (e.g. `LIMIT 1+1`) is treated as unparseable/unbounded and
+clamped too — fail-safe, not fail-open.
+
+### Verification
+
+Reproduced live before the fix; re-verified `LIMIT 999999999` and
+`LIMIT 1+1` both now come out clamped to the caller's `row_limit`, and
+a limit already under the cap (`LIMIT 5`) is left untouched. Tests:
+`test_oversized_limit_is_clamped_not_trusted`,
+`test_non_literal_limit_is_treated_as_unbounded_and_clamped`,
+`test_limit_under_the_cap_is_left_alone`.
+
+---
+
+## BUG-016 — Hybrid AI Analyst: an explicit `null` for an optional tool argument 400'd on Groq, failing the whole analysis
+
+**Severity:** Medium
+
+**Area:** Backend / Hybrid AI Analyst / AI Provider
+
+**Status:** FIXED
+
+### Description
+
+Found live running the Phase 8 step 3 evaluation harness against real
+Groq calls (`evals/runner.py`) — not a unit test, a real model response.
+Asked "Are there any duplicate rows in this dataset?", the model called
+`get_duplicates` with `{"column": null}` (ordinary tool-calling behavior
+for "I mean to omit this optional parameter"). Groq's own request-time
+schema validation rejected the call outright.
+
+### Steps to Reproduce
+
+Ask the AI Analyst an open-ended question likely to omit an optional
+tool parameter (e.g. "are there any duplicates" against `get_duplicates`,
+whose `column` is optional).
+
+### Actual Behavior
+
+```
+Error code: 400 - {'error': {'message': "Tool call validation failed: ...
+parameters for tool get_duplicates did not match schema: errors:
+[`/column`: expected string, but got null]", 'code': 'tool_use_failed'}}
+```
+Identical on all 3 retries (the request never changes), exhausting them
+and failing the entire analysis with the generic fallback message.
+
+### Root Cause
+
+Every optional tool parameter in `app/ai/tool_specs.py` was declared as
+a bare `{"type": "string"}` (etc.) — correctly absent from `required`,
+but with no `null` allowed in its type, which Groq's server-side
+argument validation enforces strictly.
+
+### Fix Applied
+
+`_spec()` now automatically widens every non-required property's JSON
+schema type to also accept `null` (verified live against the real Groq
+API before rolling out — a minimal single-tool request with the widened
+schema no longer 400s). `call_tool()` also now strips any `None`-valued
+argument before dispatching, so an explicit `null` and an omitted key
+produce an identical result — each tool function's own real Python
+default applies either way.
+
+### Regression Risk
+
+Low — every tool function's optional parameters already had sensible
+Python-level defaults; this only changes what happens when `None` is
+passed for one explicitly, which previously weren't reachable calls at
+all (the request 400'd before Python code ever ran).
+
+### Verification
+
+Reproduced live (the exact question/error above); fixed; re-ran the
+identical question live and it succeeded (`get_duplicates` called
+correctly, correct answer produced). Tests:
+`test_every_optional_property_schema_allows_null`,
+`test_call_tool_treats_an_explicit_null_argument_as_omitted`,
+`test_call_tool_falls_back_to_the_real_default_when_null_is_passed`.
 
 ---
 
