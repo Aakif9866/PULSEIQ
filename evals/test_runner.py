@@ -90,3 +90,67 @@ def test_resume_skips_already_succeeded_questions_and_keeps_their_data(tmp_path)
     by_id = {r["id"]: r for r in final["results"]}
     assert set(by_id) == {"q1", "q2", "q3"}
     assert "error" not in by_id["q2"]["analyze"]  # re-run succeeded this time
+
+
+# --- provider failures must never be scored as wrong answers -------------
+# Found live on 2026-09-25: re-running while Groq's daily cap was still
+# exhausted, the engine (correctly) degraded instead of crashing, and the
+# runner scored those degraded replies as "succeeded" with 0% accuracy.
+
+class _FakeUsage:
+    def __init__(self, errors, daily_quota_hit=False):
+        self.errors, self.daily_quota_hit = errors, daily_quota_hit
+        self.total_tokens = self.call_count = self.groq_reported_ms = 0
+
+
+def _run_one_with(status, errors, daily_quota_hit=False):
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    response = SimpleNamespace(status=status, answer="Revenue averages 1.", findings=[],
+                               tool_calls=[], warnings=[])
+
+    @contextmanager
+    def fake_track_usage():
+        yield _FakeUsage(errors, daily_quota_hit)
+
+    with (
+        patch.object(runner, "track_usage", fake_track_usage),
+        patch.object(runner, "run_analysis", return_value=response),
+    ):
+        return runner.run_one(_FAKE_QUESTIONS[0])
+
+
+def test_degraded_answer_caused_by_provider_failure_is_an_error_not_a_score():
+    entry = _run_one_with("degraded", ["RateLimitError: tokens per day"], daily_quota_hit=True)
+    assert "error" in entry["analyze"]
+    assert entry["analyze"]["daily_quota_hit"] is True
+    summary = runner.summarize([entry])
+    assert summary["analyze_succeeded"] == 0
+    assert summary["analyze_value_accuracy_pct"] is None  # not 0.0
+
+
+def test_a_retry_that_recovered_is_still_scored_normally():
+    entry = _run_one_with("ok", ["RateLimitError: tokens per minute"])
+    assert "error" not in entry["analyze"]
+    assert entry["analyze"]["value_correct"] is True
+
+
+def test_run_stops_at_the_daily_quota_instead_of_failing_every_remaining_question(tmp_path):
+    out_path = tmp_path / "run.json"
+    calls: list[str] = []
+
+    def fake_run_one(question):
+        calls.append(question.id)
+        entry = _fake_entry(question.id, succeed=False)
+        entry["analyze"]["daily_quota_hit"] = True
+        return entry
+
+    with (
+        patch.object(runner, "QUESTIONS", _FAKE_QUESTIONS),
+        patch.object(runner, "run_one", side_effect=fake_run_one),
+        patch.object(sys, "argv", ["runner.py", "--sleep", "0", "--out", str(out_path)]),
+    ):
+        runner.main()
+
+    assert calls == ["q1"]

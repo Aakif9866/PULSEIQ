@@ -2,13 +2,13 @@
 
 ## Summary
 
-Total Issues Found: 18 (running total — updated as testing proceeds;
-BUG-013 through BUG-018 were found during docs/PHASES.md Phase 8, in
+Total Issues Found: 19 (running total — updated as testing proceeds;
+BUG-013 through BUG-019 were found during docs/PHASES.md Phase 8, in
 sessions well after the original QA pass below — see each entry)
 
 Critical: 1
 High: 8
-Medium: 9
+Medium: 10
 Low: 0
 
 **A note on scope and honesty:** this environment has no browser-automation
@@ -1470,6 +1470,45 @@ Reproduced with a test route that raises (500 with no header, before);
 `test_the_500_error_log_line_carries_the_request_id`,
 `test_a_malformed_inbound_request_id_is_replaced_not_trusted`,
 `test_request_id_header_is_exposed_to_cross_origin_browser_js`.
+
+## BUG-019 — Eval harness scored provider outages as wrong answers
+
+**Severity:** Medium
+
+**Area:** Evals (`evals/runner.py`)
+
+**Status:** FIXED
+
+### Description
+
+Re-running the eval on 2026-09-25 while Groq's rolling daily token cap
+was still exhausted (199,476 of 200,000 used), the engine did what BUG-017's fix
+intended: it degraded instead of crashing. The runner then scored those
+degraded replies as `analyze_succeeded` with **0% value accuracy** —
+so a quota outage would have been reported as the model getting every
+answer wrong. `--resume` would also have skipped them as "done", which
+is why an earlier resume attempt produced 0/51 usable results.
+
+### Root Cause
+
+The runner only treated a raised exception as a failure. After BUG-017,
+a provider failure no longer raises — it returns a well-formed
+`status="degraded"` response — so the runner could no longer see it.
+
+### Fix Applied
+
+`evals/instrumentation.py` now records every provider call that raised
+(and whether it was Groq's per-day cap). A non-`ok` response produced
+while provider calls failed is recorded as an error — excluded from
+accuracy and retried by `--resume`. A response that recovered through a
+retry is still scored normally. The run stops at the first daily-cap
+hit instead of failing every remaining question.
+
+### Verification
+
+Three new tests in `evals/test_runner.py`; the two covering the bug fail
+with the fix reverted and pass with it restored. The invalid results
+file from the affected run was deleted, not kept.
 
 ---
 

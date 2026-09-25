@@ -103,7 +103,7 @@ finishes — none will be estimated in the meantime.
   oxlint clean.
 - CI on every pull request: backend, frontend, the eval harness's
   deterministic checks, and Docker image builds.
-- **18** bugs tracked with root cause, fix, and verification in
+- **19** bugs tracked with root cause, fix, and verification in
   [`docs/BUGS.md`](docs/BUGS.md) — several found by running the real app
   rather than reading the code — one (BUG-017) only by inspecting a live
   trace.

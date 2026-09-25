@@ -493,6 +493,73 @@ names, and argument *names* are enough to debug with.
 
 ---
 
+## Step 6 — Ship it
+
+### What was built
+
+A demo account that repairs itself on every deploy
+(`app/workers/seed_demo.py`, run from the backend container's start
+command). CI grew a frontend test step, an evals job (harness tests,
+dataset determinism, ground truth for all 51 questions), and a Docker
+job that builds both images. A separate, manually triggered workflow
+runs live evals. The production variables (per-user quota, demo login)
+are set on Railway. The merge to `main`, which is what deploys, is
+deliberately held until the account owner opens the PR and says go.
+
+### Why this approach over the alternatives
+
+**A self-repairing seeder, not a one-off seed script.** Storage is local
+disk on Railway (R2 needs a payment method on file, so the account owner kept
+local disk). A redeploy wipes the files but keeps their database rows,
+so a seeded-once demo would break on the first redeploy after launch
+and show visitors a dataset that can't be opened. The seeder keeps
+exactly one *healthy* dataset (profiled, with its file present), deletes
+broken ones, and re-uploads. Running it every start is safe because
+it's idempotent. It also never blocks startup: `main()` always returns 0
+and the start command adds `|| true`. A demo that fails to seed is a
+degraded demo; an API that won't start is an outage.
+
+**Live evals on demand, not on every push.** A full run can use most of
+the account's 200,000 tokens/day. That's the same quota the deployed app
+spends, so running it per push would starve real users. The per-PR job
+runs everything that doesn't need the model; the live job is one click
+away when needed.
+
+**PR, then merge, then verify, rather than pushing to `main`.** Both
+Railway services deploy automatically from `main`, so a merge *is* a
+production deploy. Putting CI in front of it is the cheapest gate
+available. Setting the variables with deploys skipped means the merge
+is the only thing that changes production.
+
+**Honest status over a green checkmark.** A rerun of the eval harness
+while the rolling daily cap was still exhausted found BUG-019: the
+runner scored quota-degraded answers as wrong. Shipping the harness
+fix and deleting the bad results, rather than publishing
+a 0% accuracy figure, is the same "never invent numbers" rule applied to
+my own tooling.
+
+### Interview questions to be ready for
+
+1. **"Your demo data lives on ephemeral disk. How does the demo survive
+   a redeploy?"** Explain the rows-survive, files-don't failure mode,
+   and how the idempotent seeder detects it (file missing or dataset
+   not profiled), deletes the broken record, and re-seeds on every
+   start. Explain why seeding never blocks the API from starting. Mention
+   the real fix, object storage behind the existing `StorageProvider`,
+   and why it's deferred.
+2. **"Why aren't your LLM evals in CI?"** They are, split in two:
+   deterministic checks on every PR, and live-model runs on demand.
+   Explain the shared daily token budget and why a per-push live run
+   would take the production app down with it.
+3. **"How did you make sure an outage didn't show up as a bad accuracy
+   number?"** Walk through BUG-019: after BUG-017, a provider failure
+   no longer raises. It returns a degraded response, so the runner
+   counted it as a wrong answer. The fix tells the two apart by
+   recording failed provider calls, and it stops the run at the daily
+   cap.
+
+---
+
 ## Step 7 — Portfolio packaging
 
 ### What was built

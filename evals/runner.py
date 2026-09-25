@@ -83,6 +83,12 @@ def value_matches(expected, haystack: str, tolerance_pct: float) -> bool:
     return str(expected).lower() in haystack.lower()
 
 
+class _ProviderUnavailable(Exception):
+    def __init__(self, message: str, daily_quota_hit: bool) -> None:
+        super().__init__(message)
+        self.daily_quota_hit = daily_quota_hit
+
+
 def _score_analyze(question: EvalQuestion, response) -> dict:
     haystack = response.answer + " " + " ".join(str(f.value) for f in response.findings)
     tools_used = {tc.tool for tc in response.tool_calls}
@@ -139,6 +145,13 @@ def run_one(question: EvalQuestion) -> dict:
     try:
         with track_usage() as usage:
             response = run_analysis(df, GroqProvider(), question.question)
+        if response.status != "ok" and usage.errors:
+            # The engine degrades gracefully when the provider fails
+            # (BUG-017), so this is a well-formed response — but it measures
+            # the provider's availability, not the model's accuracy. Scoring
+            # it would count a rate limit as a wrong answer; recording it as
+            # an error excludes it from accuracy and lets --resume retry it.
+            raise _ProviderUnavailable(usage.errors[-1], daily_quota_hit=usage.daily_quota_hit)
         entry["analyze"] = {
             **_score_analyze(question, response),
             "latency_ms": round((time.perf_counter() - start) * 1000),
@@ -146,6 +159,10 @@ def run_one(question: EvalQuestion) -> dict:
             "call_count": usage.call_count,
             "groq_reported_ms": round(usage.groq_reported_ms),
         }
+    except _ProviderUnavailable as exc:
+        entry["analyze"] = {"error": f"provider unavailable: {exc}", "provider_unavailable": True,
+                            "daily_quota_hit": exc.daily_quota_hit}
+        return entry  # other paths would hit the same exhausted provider
     except (AiResponseError, InvalidQueryError) as exc:
         elapsed_ms = round((time.perf_counter() - start) * 1000)
         entry["analyze"] = {"error": str(exc), "latency_ms": elapsed_ms}
@@ -291,6 +308,12 @@ def main() -> None:
         analyze_error = entry.get("analyze", {}).get("error")
         status = "OK" if analyze_error is None else f"FAILED: {analyze_error}"
         print(f"    analyze: {status}", flush=True)
+        if entry.get("analyze", {}).get("daily_quota_hit"):
+            # Every remaining question would fail the same way until the
+            # rolling 24h window frees up — stop instead of burning through them.
+            print("\nStopped: the provider's daily token limit was hit. Re-run with "
+                  "--resume later; completed questions are kept.", flush=True)
+            break
         if i < len(questions):
             time.sleep(args.sleep)
 

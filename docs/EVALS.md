@@ -168,12 +168,17 @@ interrupted the same way.
 ### Next steps to complete this
 
 Resume with `evals/runner.py --sleep 30 --out evals/results/full_run.json
---resume` once Groq's daily quota has enough headroom (the retry-after
-values observed fluctuated 5-19 minutes, suggesting a rolling window
-that frees up gradually rather than a fixed reset — this session is
-attempting a resume; see `docs/PROGRESS.md` for the outcome). The
-results table below stays unfilled until that completes for real — no
-number in it will be estimated or backfilled from memory.
+--resume` once Groq's daily quota has enough headroom. The cap is a
+rolling 24-hour window, not a midnight reset: a probe at 19:27 IST on
+2026-09-25, about three hours after the cap was first hit, still showed 199,476 of 200,000
+tokens used.
+
+That attempt also exposed **BUG-019** (`docs/BUGS.md`): the runner
+scored quota-degraded replies as wrong answers. It's fixed. Such replies
+are now recorded as provider errors, excluded from accuracy, and retried
+on `--resume`. The run also stops at the first daily-cap hit. The
+affected results file was deleted. The results table below stays unfilled until a complete
+run exists; no number in it will be estimated.
 
 | Metric | Value |
 |---|---|

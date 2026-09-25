@@ -22,9 +22,20 @@ _patched = False
 _current: "UsageTracker | None" = None
 
 
+def _is_daily_quota_error(exc: Exception) -> bool:
+    """Groq's per-day cap (TPD) — unlike the per-minute cap, retrying
+    within a run can't recover from it, so the runner stops on it."""
+    return getattr(exc, "status_code", None) == 429 and "tokens per day" in str(exc)
+
+
 @dataclass
 class UsageTracker:
     calls: list[dict] = field(default_factory=list)
+    # Provider calls that raised — including ones a retry later recovered
+    # from. The runner uses these to tell "the model answered wrongly"
+    # apart from "the provider never let it answer".
+    errors: list[str] = field(default_factory=list)
+    daily_quota_hit: bool = False
 
     @property
     def call_count(self) -> int:
@@ -52,7 +63,13 @@ def _ensure_patched() -> None:
 
     def _instrumented_create(*args, **kwargs):
         start = time.perf_counter()
-        response = original_create(*args, **kwargs)
+        try:
+            response = original_create(*args, **kwargs)
+        except Exception as exc:
+            if _current is not None:
+                _current.errors.append(f"{type(exc).__name__}: {exc}"[:300])
+                _current.daily_quota_hit |= _is_daily_quota_error(exc)
+            raise
         latency_ms = (time.perf_counter() - start) * 1000
         if _current is not None:
             usage = getattr(response, "usage", None)

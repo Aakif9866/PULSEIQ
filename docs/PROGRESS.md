@@ -625,3 +625,17 @@ short — what changed and what's next, not a full diff.
   scope, which bug came from tracing). Resume bullets checked by script:
   21-24 words, verb-first, no pronouns. Outstanding: a GIF (needs a human
   screen recording) and eval accuracy (needs a complete live run).
+
+## 2026-09-25 (late night — eval harness fix, BUG-019)
+
+- Groq was probed at 19:27 IST. Requests succeed, but the rolling daily
+  window was still at 199,476 of 200,000 tokens, so a full run isn't
+  possible yet.
+- A resume attempt in that state found **BUG-019**: degraded replies
+  caused by the quota were scored as wrong answers (0% accuracy) instead
+  of failures. Fixed in `evals/runner.py` and `evals/instrumentation.py`
+  with 3 new tests; the two that cover the bug fail with the fix
+  reverted. The invalid results file was deleted.
+- Still not merged, at the account owner's request. The three Railway
+  production variables are set without a redeploy.
+
