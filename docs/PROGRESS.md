@@ -670,3 +670,22 @@ short — what changed and what's next, not a full diff.
   image on R2 (seeder upload, API upload, NL-to-SQL); a container rebuild
   with the dataset still readable and no re-seed; delete removes the
   object. `render.yaml` switched to `STORAGE_PROVIDER=r2`.
+
+## 2026-10-15 (SQL Explorer UI — the last P0 V2 gap)
+
+- An audit against `docs/V2_FEATURES.md` found that the SQL Explorer, query
+  history, saved queries, and NL-to-SQL were backend-only: every endpoint
+  was built and tested, but no screen reached them.
+- Added an **SQL Explorer** card to the dataset page
+  (`components/sql/sql-explorer.tsx`, hooks in `features/history/api.ts`):
+  an SQL editor, "ask in plain English" (`/ask-sql`, with the generated SQL
+  placed in the editor so it's visible and editable), suggested queries,
+  results, save/load/delete saved queries, and recent SQL history. All of it
+  goes through the existing backend validator; no backend change.
+- 2 new frontend tests (26/26): generated SQL shows up in the editor with
+  its answer and rows, and a validator rejection shows the message plus the
+  request reference.
+- **Still open, deliberately:** P2 dashboard resize/filters/saved layout
+  (not built; the plan marks it as polish), the Settings placeholder, the
+  rest of the eval run (15/51 left), and the Render Blueprint (owner's
+  login).

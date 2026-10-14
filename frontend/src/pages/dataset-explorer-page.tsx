@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { SqlExplorer } from '@/components/sql/sql-explorer'
 import { useDataset, useRunDatasetQuery } from '@/features/datasets/api'
 import { ApiError } from '@/lib/api-client'
 import { formatBytes } from '@/lib/utils'
@@ -365,6 +366,8 @@ export function DatasetExplorerPage() {
                   defaultTitle={`${dataset.original_filename} — ${mode === 'summary' ? 'Summary' : 'Preview'}`}
                 />
               )}
+
+            {datasetId && <SqlExplorer datasetId={datasetId} />}
           </>
         )}
       </div>
