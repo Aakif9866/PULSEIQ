@@ -3,8 +3,8 @@
 R2 requires no egress fees and speaks the S3 API, so this is a thin wrapper
 around boto3's S3 client pointed at the account's R2 endpoint.
 
-Not yet exercised against a real R2 bucket in this project — see
-docs/STORAGE.md for exactly what's needed to turn this on.
+Verified against a real R2 bucket on 2026-10-15 (round trip, upload
+through the API, survival across a container rebuild) — docs/STORAGE.md.
 """
 import io
 import os

@@ -40,7 +40,7 @@ flowchart LR
     ENG --> VAL[Answer validator]
     API --> SQL[SQL validator<br/>sqlglot AST] --> DUCK[DuckDB<br/>external access off]
     API --> PG[(PostgreSQL / Neon)]
-    API --> ST[StorageProvider<br/>local disk · R2-ready]
+    API --> ST[StorageProvider<br/>Cloudflare R2 · local disk in dev]
     API -. optional OTLP .-> OTEL[Tracing backend]
 ```
 

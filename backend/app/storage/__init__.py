@@ -27,6 +27,13 @@ def get_storage_provider() -> StorageProvider:
         ]
         if missing:
             raise RuntimeError(f"STORAGE_PROVIDER=r2 requires {', '.join(missing)} to be set")
+        # The bucket's public r2.dev URL looks plausible but rejects every
+        # API call with a bare 401; fail loudly instead.
+        if settings.R2_ENDPOINT_URL and ".r2.dev" in settings.R2_ENDPOINT_URL:
+            raise RuntimeError(
+                "R2_ENDPOINT_URL is the bucket's public r2.dev URL; use "
+                "https://<account_id>.r2.cloudflarestorage.com or leave it unset"
+            )
 
         return R2StorageProvider(
             account_id=settings.R2_ACCOUNT_ID,  # type: ignore[arg-type]

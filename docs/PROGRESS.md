@@ -658,3 +658,15 @@ short — what changed and what's next, not a full diff.
   survived, but `write_text` truncates before writing, so the runner now
   writes a temp file and renames it.
 - Checks: backend 316/316, frontend 24/24, ruff/mypy/tsc/oxlint clean.
+
+## 2026-10-15 (Cloudflare R2 live-verified)
+
+- The account owner added R2 credentials. The first two tokens failed
+  with `AccessDenied` and the third with `401`. Root cause:
+  `R2_ENDPOINT_URL` pointed at the bucket's public `pub-….r2.dev` URL, not
+  the S3 API endpoint. Fixed in `.env`. `get_storage_provider()` now
+  rejects an `r2.dev` endpoint with a clear message (plus a test).
+- Verified against the real bucket: provider round trip; the production
+  image on R2 (seeder upload, API upload, NL-to-SQL); a container rebuild
+  with the dataset still readable and no re-seed; delete removes the
+  object. `render.yaml` switched to `STORAGE_PROVIDER=r2`.

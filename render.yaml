@@ -25,8 +25,18 @@ services:
         value: production
       - key: DEBUG
         value: "false"
+      # R2, so uploads survive free-tier sleeps and redeploys. The
+      # endpoint is derived from R2_ACCOUNT_ID; never the public r2.dev URL.
       - key: STORAGE_PROVIDER
-        value: local
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: pulse-iq
       # ponytail: free instance has 512 MB RAM; raise with a paid plan
       - key: MAX_UPLOAD_SIZE_MB
         value: "25"

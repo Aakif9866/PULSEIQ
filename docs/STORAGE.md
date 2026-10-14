@@ -5,9 +5,10 @@ from local disk to Cloudflare R2 later.
 
 ## Current Mode
 
-**Local filesystem.** Local storage is active because Cloudflare R2
-credentials are temporarily unavailable — not because R2 isn't supported.
-No Cloudflare account, R2 bucket, or credentials are required to run
+**Production (Render): Cloudflare R2** (bucket `pulse-iq`, set in
+`render.yaml`), verified against the real bucket on 2026-10-15; see "R2:
+verified" below. **Local development: local filesystem** by default. No
+Cloudflare account, R2 bucket, or credentials are required to run
 PulseIQ today. Every dataset upload, profiling run, query, AI analysis,
 and dashboard chart works fully against files stored on the backend's own
 disk; uploaded CSV/XLSX datasets are stored through `LocalStorageProvider`
@@ -113,19 +114,40 @@ disk-backed durability you can rely on everywhere:**
   missing" (which ephemeral storage can cause). Would be a reasonable
   addition alongside a real cleanup job.
 
-## Future Cloudflare R2 Migration
+## R2: verified (2026-10-15)
 
-`R2StorageProvider` (`app/storage/r2.py`) is fully implemented against the
-same interface — S3-compatible, via `boto3`. It is **not yet exercised
-against a real R2 bucket** (no credentials were available while building
-it); the code path for "R2 selected but misconfigured" has been verified
-to fail loudly and cleanly (see below), but a real upload/download round
-trip against an actual bucket has not.
+`R2StorageProvider` (`app/storage/r2.py`) implements the same interface
+over the S3 API (`boto3`). Against the real `pulse-iq` bucket:
 
-**To turn it on, once you have a Cloudflare account and bucket:**
+- **Provider round trip:** `save` → `exists` → `open` → `local_path` →
+  `delete`, all with matching bytes, and the object gone afterwards.
+- **Through the app:** the production image ran with `STORAGE_PROVIDER=r2`
+  (512 MiB limit). The demo seeder uploaded and profiled its dataset to
+  R2, a CSV uploaded through `POST /datasets` showed up in the bucket under
+  `<user_id>/<uuid>.csv`, and NL-to-SQL ran against it.
+- **Survives a redeploy:** the container was destroyed and recreated
+  (fresh filesystem, same database). The same dataset still queried
+  correctly, and the seeder found the demo data healthy and didn't
+  re-upload it. This is exactly what failed on local disk.
+- **Delete:** `DELETE /datasets/{id}` removed the object from the bucket.
+- Test objects were removed afterwards; the bucket was left empty.
 
-1. Create an R2 bucket and an API token (Cloudflare dashboard → R2 → Manage
-   API tokens) with read/write access to that bucket.
+**Gotcha found while setting it up:** `R2_ENDPOINT_URL` set to the
+bucket's *public* URL (`https://pub-….r2.dev`) gets a bare `401
+Unauthorized` on every API call, which looks like a credentials problem.
+The S3 API endpoint is `https://<account_id>.r2.cloudflarestorage.com`
+(or leave it unset; it's derived from `R2_ACCOUNT_ID`).
+`get_storage_provider()` now rejects an `r2.dev` endpoint with a message
+saying so (`tests/test_storage_selection.py`). Also: R2 returns the same
+`AccessDenied` for a wrong secret as for a missing permission, so
+`AccessDenied` doesn't prove the key pair is valid.
+
+**To turn it on elsewhere (e.g. local dev):**
+
+1. Create an R2 bucket and an **Account API token** (Cloudflare dashboard →
+   R2 → Manage API tokens) with **Object Read & Write** on that bucket.
+   Copy the Access Key ID and Secret Access Key from the creation page;
+   the secret isn't shown again.
 2. Set in `.env`:
    ```bash
    STORAGE_PROVIDER=r2

@@ -24,6 +24,7 @@ deploying branch `feature/pulseiq-v2-roadmap`):
 |---|---|---|
 | Backend `pulseiq-api` | Free web service, Docker (`backend/Dockerfile`, unchanged) | Sleeps after 15 min idle; the first request after that waits about a minute. `PORT` is injected (10000) and already honored. |
 | Frontend `pulseiq` | Free static site (`npm ci && npm run build`, publishes `dist`) | Never sleeps. A `/* → /index.html` rewrite handles SPA routes. It calls the backend directly through `VITE_API_URL`, so nginx isn't used. |
+| Storage | Cloudflare R2, bucket `pulse-iq` | Uploads survive sleeps and redeploys. Verified against the real bucket, including a container rebuild (`docs/STORAGE.md`). |
 | Database | Neon (unchanged) | Already at migration 0008; the image's `CMD` applies 0009 on first boot. |
 
 **Verified locally under Render's constraints** (the same image, `docker
@@ -45,9 +46,11 @@ owner's Render login.
 
 1. render.com → sign in with GitHub → **New → Blueprint** → pick
    `Aakif9866/PULSEIQ`. Render reads `render.yaml`.
-2. Fill the three prompted secrets: `DATABASE_URL` (the Neon string),
-   `GROQ_API_KEY`, `DEMO_USER_PASSWORD` (the README's demo password).
-   `SECRET_KEY` is generated.
+2. Fill the prompted secrets: `DATABASE_URL` (the Neon string),
+   `GROQ_API_KEY`, `DEMO_USER_PASSWORD` (the README's demo password), and
+   `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (the same
+   values as local `.env`). `SECRET_KEY` is generated; `R2_ENDPOINT_URL`
+   stays unset.
 3. Apply. If Render gives either service a suffixed URL because the name
    is taken, put the real URLs into `VITE_API_URL` (frontend) and
    `CORS_ORIGINS` (backend), then redeploy both.
