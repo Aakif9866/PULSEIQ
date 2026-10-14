@@ -357,8 +357,10 @@ alternatives, 3 interview questions to be ready for).
       — the old test would have passed with no cap at all), provider
       fallback, quota exceeded, cache hit. 17 new backend tests (309
       total), 5 new frontend tests (24 total).
-- [~] **Step 6 — Ship it** *(built and verified locally; production deploy pending the
-      V2 pull request — see docs/DEPLOYMENT.md "V2 release")*. Original scope: Switch storage to Cloudflare R2 via the
+- [~] **Step 6 — Ship it** *(built and verified locally; moved to Render after Railway's trial lapsed
+      on 2026-10-06; `render.yaml` verified locally under the free tier's
+      limits, the live deploy waits on the owner's Render login — see
+      docs/DEPLOYMENT.md "Render")*. Original scope: Switch storage to Cloudflare R2 via the
       existing `StorageProvider` (per `docs/STORAGE.md`); GitHub Actions CI
       running lint/typecheck/tests plus a fast eval subset on every PR;
       deploy backend + frontend (Render or similar) with Neon Postgres,
@@ -368,8 +370,8 @@ alternatives, 3 interview questions to be ready for).
 - [~] **Step 7 — Portfolio packaging** *(README and docs/RESUME.md written, every claim
       checked against the code and every number sourced — see RESUME.md's source table.
       Two items outstanding: the short GIF needs a human screen recording (no browser or
-      recording tool in this environment), and the eval results table waits on a
-      complete live run)*. Original scope: Rewrite `README.md` — one-line
+      recording tool in this environment), and the eval results table holds a partial run, 36 of 51
+      questions on 2026-10-14; it finishes with `--resume`)*. Original scope: Rewrite `README.md` — one-line
       pitch, live demo link, short GIF, Mermaid architecture diagram, eval
       results table, "key engineering decisions" (deterministic tools +
       validator over free-form answers, how NL-to-SQL stays safe, how rate

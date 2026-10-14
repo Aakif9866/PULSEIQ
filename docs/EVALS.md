@@ -180,24 +180,48 @@ on `--resume`. The run also stops at the first daily-cap hit. The
 affected results file was deleted. The results table below stays unfilled until a complete
 run exists; no number in it will be estimated.
 
+### Run of 2026-10-14 (partial: 36 of 51)
+
+Resumed from scratch with `--resume`. It answered 36 questions, then
+stopped cleanly on question 37 at the daily cap (`Used 199874` of
+200,000). That stop was recorded as a provider failure and kept out of the
+accuracy numbers (the BUG-019 fix working as intended). A full disk on the
+dev machine also interrupted the run once; the results file survived, and
+`_write_results` now writes to a temp file and renames it, so a failed
+write can't truncate the saved results.
+
+Every number below covers only these 36 questions
+(`evals/results/full_run.json`):
+
 | Metric | Value |
 |---|---|
-| Questions run | — |
-| `/analyze` succeeded / failed | — |
-| Value accuracy | — |
-| Tool-selection accuracy | — |
-| Findings returned (verified / unverified) | — |
-| Validator flagged (% of findings) | — |
-| Avg latency / question | — |
-| Avg tokens / question | — |
-| Avg tool calls / question | — |
+| Questions run | 37 of 51 (1 provider failure, the daily cap) |
+| `/analyze` succeeded / failed | 36 / 1 |
+| Value accuracy | 32 / 36 (88.9%) |
+| Tool-selection accuracy | 100% |
+| Findings returned (verified / unverified) | 63 / 11 (74 total) |
+| Validator flagged (% of findings) | 14.9% |
+| Avg latency / question | 10.0 s |
+| Avg tokens / question | 6,055 |
+| Avg tool calls / question | 2.8 |
 
-### `/ask` vs `/analyze`, on the subset both can answer
+Wrong answers: `ecom-dup-2`, `ecom-filter-1`, `ecom-timeseries-1`,
+`emp-dup-2`. Two of the four are duplicate-detection questions.
+
+### `/ask` vs `/analyze`, on the subset both can answer (n=9)
 
 | Metric | `/ask` (legacy) | `/analyze` (hybrid) |
 |---|---|---|
-| Value accuracy | — | — |
-| Avg tokens / question | — | — |
+| Value accuracy | 88.9% | 88.9% |
+| Avg tokens / question | 1,411 | 5,755 |
+
+On this small subset, `/analyze` costs about 4x the tokens for the same
+accuracy. What it adds is the validator and the tool trace, not
+accuracy on simple questions.
+
+To finish: `python ../evals/runner.py --sleep 30 --out
+../evals/results/full_run.json --resume` from `backend/` once the quota
+resets.
 
 ## Reproducing this run
 

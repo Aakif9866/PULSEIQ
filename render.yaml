@@ -1,0 +1,57 @@
+# Render Blueprint: Render dashboard → New → Blueprint → this repo.
+# Free plan: the backend sleeps after 15 min idle (first request ~1 min);
+# the static frontend never sleeps. Database stays on Neon.
+# If Render gives a service a suffixed URL (name taken), update
+# VITE_API_URL and CORS_ORIGINS below to match, and redeploy both.
+services:
+  - type: web
+    name: pulseiq-api
+    runtime: docker
+    plan: free
+    branch: feature/pulseiq-v2-roadmap
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DEMO_USER_PASSWORD
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: STORAGE_PROVIDER
+        value: local
+      # ponytail: free instance has 512 MB RAM; raise with a paid plan
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "25"
+      - key: AI_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: AI_DAILY_TOKEN_QUOTA_PER_USER
+        value: "30000"
+      - key: DEMO_USER_EMAIL
+        value: demo@pulseiq.dev
+      - key: CORS_ORIGINS
+        value: '["https://pulseiq.onrender.com"]'
+
+  - type: web
+    name: pulseiq
+    runtime: static
+    branch: feature/pulseiq-v2-roadmap
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://pulseiq-api.onrender.com/api/v1
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

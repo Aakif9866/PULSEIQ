@@ -4,8 +4,9 @@
 whose every number was computed by real code — then checked — not
 guessed by a language model.**
 
-**Live demo:** [pulseiq-frontend-production.up.railway.app](https://pulseiq-frontend-production.up.railway.app)
-— log in with `demo@pulseiq.dev` / `TryPulseIQ-9220`. A sample e-commerce
+**Live demo:** moving to Render (the Railway trial ended on 2026-10-06 and
+its deployments were removed); the link goes here once the Render deploy is
+verified. Log in with `demo@pulseiq.dev` / `TryPulseIQ-9220`. A sample e-commerce
 dataset (full of deliberate data-quality problems) and a dashboard are
 already loaded. Try *"Find the most important anomalies in this
 dataset."*
@@ -84,18 +85,21 @@ A 51-question harness ([`evals/`](evals/)) over two generated datasets
 covers all 16 tools, NL-to-SQL, and multi-step questions, with ground
 truth computed by the app's own tools — never by the model.
 
-**Honest status:** the full live run hasn't completed. It stopped at
-question 27 on Groq's free-tier limit of 200,000 tokens per day. What
-*has* been measured:
+**Honest status: partial run.** The 2026-10-14 run answered 36 of 51
+questions before Groq's free-tier limit of 200,000 tokens per day stopped
+it. Its numbers cover only those 36, from
+[`evals/results/full_run.json`](evals/results/full_run.json):
 
-| Measurement | Result | Source |
-|---|---|---|
-| Live questions answered before the daily cap | 26 of 27 attempted | first full run's log |
-| Tokens per `/analyze` question (spot check, n=3) | 3,227 – 6,651 | [`evals/results/smoke_2026-09-25.json`](evals/results/smoke_2026-09-25.json) + one console run |
-| Tokens for a repeated question | 0 (served from cache) | tests |
+| Measurement (36 answered questions) | Result |
+|---|---|
+| Value accuracy | 32 / 36 (88.9%) |
+| Tool-selection accuracy | 100% |
+| Findings the validator flagged as unverified | 11 of 74 (14.9%) |
+| Avg tokens / latency per question | 6,055 / 10.0 s |
+| Tokens for a repeated question | 0 (served from cache; tests) |
 
-Full numbers land in [`docs/EVALS.md`](docs/EVALS.md) once a complete run
-finishes — none will be estimated in the meantime.
+The remaining 15 questions run with `--resume` once the quota resets.
+[`docs/EVALS.md`](docs/EVALS.md) has the breakdown.
 
 ## Engineering quality
 
@@ -117,7 +121,7 @@ finishes — none will be estimated in the meantime.
 | AI | Groq, behind a provider abstraction; off unless `AI_PROVIDER=groq` |
 | Observability | structlog JSON logs with request ids; optional OpenTelemetry (OTLP) |
 | Frontend | React 19, Vite, TypeScript, Tailwind CSS v4, TanStack Query, ECharts, Vitest |
-| Deploy | Railway (both services, from `main`), Docker |
+| Deploy | Render (Blueprint in `render.yaml`), Docker; Neon Postgres |
 
 ## Run it locally
 
@@ -155,7 +159,7 @@ cd evals && python -m pytest                      # harness tests; live runs: se
 | [`AI_ANALYTICS.md`](docs/AI_ANALYTICS.md) | The AI Analyst, caching, quotas, cost, and measured token usage |
 | [`SECURITY.md`](docs/SECURITY.md) | The security model, including the NL-to-SQL audit |
 | [`EVALS.md`](docs/EVALS.md) | The evaluation harness: method, and results as they exist |
-| [`DEPLOYMENT.md`](docs/DEPLOYMENT.md) | The Railway deploy, what's verified on the platform and what isn't |
+| [`DEPLOYMENT.md`](docs/DEPLOYMENT.md) | The deploy (Render; Railway history), what's verified on the platform and what isn't |
 | [`BUGS.md`](docs/BUGS.md) | Every bug found: root cause, fix, verification |
 | [`STORAGE.md`](docs/STORAGE.md) | The storage abstraction and the R2 path |
 | [`TESTING.md`](docs/TESTING.md) | Test suites and verified end-to-end flows |

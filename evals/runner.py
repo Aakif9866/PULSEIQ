@@ -266,7 +266,11 @@ def _write_results(out_path: Path, results: list[dict]) -> None:
     summary = summarize(results)
     payload = json.dumps({"summary": summary, "results": results}, indent=2, default=str)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(payload)
+    # Write-then-rename: a plain write_text truncates first, so a failed
+    # write (disk full, killed mid-write) would wipe every saved result.
+    tmp = out_path.with_suffix(".tmp")
+    tmp.write_text(payload)
+    tmp.replace(out_path)
 
 
 def main() -> None:

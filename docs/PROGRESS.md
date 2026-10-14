@@ -639,3 +639,22 @@ short — what changed and what's next, not a full diff.
 - Still not merged, at the account owner's request. The three Railway
   production variables are set without a redeploy.
 
+
+## 2026-10-14 (Phase 8 — evals resumed, hosting moved to Render)
+
+- **Production was down.** Railway's workspace billing went `INACTIVE`
+  when the trial ended, and both deployments were removed on 2026-10-06;
+  both URLs return 404. The account owner chose Render's free tier.
+  Added a `render.yaml` Blueprint (Docker backend plus static frontend,
+  deploying the V2 branch; the owner wants to keep developing there
+  rather than merge yet). Verified locally under Render's limits (512 MiB
+  memory, `PORT=10000`): 196 MiB peak, full demo flow working. Not yet
+  deployed, because that needs the owner's Render login.
+- **Live eval: 36 of 51 answered** before Groq's daily cap: 88.9% value
+  accuracy (32/36), 100% tool selection, 14.9% of findings flagged by the
+  validator, 6,055 tokens and 10.0 s per question on average. The other
+  15 resume tomorrow.
+- **Runner hardening:** the dev machine's disk filled mid-run. Results
+  survived, but `write_text` truncates before writing, so the runner now
+  writes a temp file and renames it.
+- Checks: backend 316/316, frontend 24/24, ruff/mypy/tsc/oxlint clean.

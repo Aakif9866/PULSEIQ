@@ -1,0 +1,1051 @@
+{
+  "summary": {
+    "total_questions": 37,
+    "analyze_succeeded": 36,
+    "analyze_failed": 1,
+    "analyze_value_accuracy_pct": 88.9,
+    "analyze_tool_selection_accuracy_pct": 100.0,
+    "validator_flagged_pct_of_findings": 14.9,
+    "findings_total": 74,
+    "findings_unverified": 11,
+    "avg_latency_ms": 10002.0,
+    "avg_tokens_per_question": 6055.0,
+    "avg_tool_calls_per_question": 2.8,
+    "ask_vs_analyze_comparable_questions": 9,
+    "ask_value_accuracy_pct": 88.9,
+    "analyze_value_accuracy_on_comparable_subset_pct": 88.9,
+    "ask_avg_tokens": 1411.0,
+    "analyze_avg_tokens_on_comparable_subset": 5755.0
+  },
+  "results": [
+    {
+      "id": "ecom-profile-1",
+      "dataset": "ecommerce",
+      "question": "Give me a full profile of this dataset.",
+      "category": "get_dataset_profile",
+      "expected_value": 120,
+      "value_description": "row count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_logical_violations",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset comprises 120 rows across 11 columns. Only the region field has missing values in 6 rows (5%). There are four exact duplicate rows (3.33%) and six revenue outliers (5%). Two records (1.67%) show customer ages outside the expected 0\u2011120 range, flagging logical violations. Units and revenue are almost perfectly correlated (\u22480.99), indicating revenue is driven mainly by quantity sold.",
+        "findings_total": 5,
+        "findings_verified": 5,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 8802,
+        "total_tokens": 9998,
+        "call_count": 3,
+        "groq_reported_ms": 5668
+      }
+    },
+    {
+      "id": "ecom-colstats-1",
+      "dataset": "ecommerce",
+      "question": "What's the average revenue per order?",
+      "category": "get_column_statistics",
+      "expected_value": 4964.81,
+      "value_description": "mean revenue",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_column_statistics",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The average revenue generated per order is approximately 4,964.81. This figure comes from the mean of the revenue column across all 120 orders in the dataset. The value reflects the overall sales performance per transaction.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 25185,
+        "total_tokens": 6754,
+        "call_count": 3,
+        "groq_reported_ms": 1567
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "The average revenue per order is approximately\u202f4,964.81. This figure comes directly from the data you provided.",
+        "latency_ms": 1697,
+        "total_tokens": 1014
+      }
+    },
+    {
+      "id": "ecom-colstats-2",
+      "dataset": "ecommerce",
+      "question": "What's the median unit price?",
+      "category": "get_column_statistics",
+      "expected_value": 439.89,
+      "value_description": "median unit price",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_column_statistics"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The median unit price across all orders is 439.89. This means half of the sold items are priced below this amount and half above.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2560,
+        "total_tokens": 1547,
+        "call_count": 1,
+        "groq_reported_ms": 229
+      }
+    },
+    {
+      "id": "ecom-missing-1",
+      "dataset": "ecommerce",
+      "question": "Are there any missing values in this dataset, and which column?",
+      "category": "get_missing_values",
+      "expected_value": 6,
+      "value_description": "missing count in region",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_missing_values"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the dataset contains missing values. Only the 'region' column has missing entries, with 6 rows (5% of the 120 rows) lacking a value.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2579,
+        "total_tokens": 3381,
+        "call_count": 2,
+        "groq_reported_ms": 909
+      }
+    },
+    {
+      "id": "ecom-dup-1",
+      "dataset": "ecommerce",
+      "question": "Are there any duplicate rows in this dataset?",
+      "category": "get_duplicates",
+      "expected_value": 4,
+      "value_description": "duplicate row count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_duplicates"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the dataset contains duplicate rows. There are 4 duplicate rows, which is about 3.33% of the 120 total rows. The duplicates were identified by checking the combination of order_id and customer_id, which are the key columns for uniqueness.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 4298,
+        "total_tokens": 6650,
+        "call_count": 3,
+        "groq_reported_ms": 1519
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "Yes, the dataset contains duplicate rows. The row with order_id\u202fORD0001 appears four times, while every other row appears only once.",
+        "latency_ms": 29262,
+        "total_tokens": 3751
+      }
+    },
+    {
+      "id": "ecom-dup-2",
+      "dataset": "ecommerce",
+      "question": "Are there any duplicate order IDs?",
+      "category": "get_duplicates",
+      "expected_value": 3,
+      "value_description": "duplicate order_id count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_duplicates"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "Yes, the dataset contains duplicate order IDs. The order ID 'ORD0001' appears four times, accounting for four rows out of 120 total rows. This indicates a duplicate key issue that may affect downstream analyses that assume unique order identifiers.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 4242,
+        "total_tokens": 3646,
+        "call_count": 2,
+        "groq_reported_ms": 816
+      }
+    },
+    {
+      "id": "ecom-unique-1",
+      "dataset": "ecommerce",
+      "question": "What regions are represented in this data?",
+      "category": "get_unique_values",
+      "expected_value": [
+        "East",
+        "North",
+        "South",
+        "West"
+      ],
+      "value_description": "distinct regions",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_unique_values"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset includes four distinct regions: East, South, North, and West.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2257,
+        "total_tokens": 3337,
+        "call_count": 2,
+        "groq_reported_ms": 981
+      }
+    },
+    {
+      "id": "ecom-group-1",
+      "dataset": "ecommerce",
+      "question": "What's the total revenue by category? Which category earns the most?",
+      "category": "group_by_aggregate",
+      "expected_value": "Electronics",
+      "value_description": "top category by revenue",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Aggregating revenue across categories shows that Electronics leads with a total revenue of 476,565.6, followed by Home, Sports, Beauty, and Books. Therefore, Electronics is the top\u2011earning category in the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2317,
+        "total_tokens": 3552,
+        "call_count": 2,
+        "groq_reported_ms": 1417
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "The total revenue for each category is as follows: Electronics generated about\u202f476,565.60, Home about\u202f33,959.03, Sports about\u202f31,197.70, Beauty about\u202f30,740.70, and Books about\u202f23,314.13. Electronics has the highest revenue, far exceeding the other categories.",
+        "latency_ms": 1841,
+        "total_tokens": 1117
+      }
+    },
+    {
+      "id": "ecom-group-2",
+      "dataset": "ecommerce",
+      "question": "How many orders come from each region?",
+      "category": "group_by_aggregate",
+      "expected_value": 39,
+      "value_description": "largest region order count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset contains 39 orders from the North region, 27 from the East, 26 from the South, and 22 from the West. Additionally, 6 orders have a missing region value. These counts reflect the total number of order records per region in the current data.",
+        "findings_total": 5,
+        "findings_verified": 0,
+        "findings_unverified": 5,
+        "warnings": [
+          "Could not verify the numbers behind: \"Number of orders from North region\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Number of orders from East region\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Number of orders from South region\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Number of orders from West region\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Number of orders with missing region\" \u2014 shown with lower confidence."
+        ],
+        "latency_ms": 6327,
+        "total_tokens": 8407,
+        "call_count": 5,
+        "groq_reported_ms": 1410
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "There are 39 orders from the North region, 26 from the South, 27 from the East, and 22 from the West. Additionally, 6 orders have no region listed. These counts represent the total orders for each region in the data.",
+        "latency_ms": 1921,
+        "total_tokens": 1102
+      }
+    },
+    {
+      "id": "ecom-filter-1",
+      "dataset": "ecommerce",
+      "question": "How many orders were returned?",
+      "category": "filter_rows",
+      "expected_value": 20,
+      "value_description": "returned order count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows",
+          "group_by_aggregate"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "There are no orders with a status of \"Returned\" in the dataset; the count is zero out of 120 total orders.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 6367,
+        "total_tokens": 5149,
+        "call_count": 3,
+        "groq_reported_ms": 3106
+      },
+      "ask": {
+        "value_correct": false,
+        "answer": "The dataset shows that 33 orders were returned. This is the total count of returned orders recorded.",
+        "latency_ms": 1247,
+        "total_tokens": 959
+      }
+    },
+    {
+      "id": "ecom-filter-2",
+      "dataset": "ecommerce",
+      "question": "How many orders have revenue greater than 10000?",
+      "category": "filter_rows",
+      "expected_value": 1,
+      "value_description": "high-revenue order count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Only one order in the dataset has revenue greater than 10,000, which is about 0.8% of the 120 total orders.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 4289,
+        "total_tokens": 5385,
+        "call_count": 3,
+        "groq_reported_ms": 3063
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "There is exactly one order whose revenue exceeds\u202f10,000. This is reflected by the order count of\u202f1 in the query result.",
+        "latency_ms": 1426,
+        "total_tokens": 1006
+      }
+    },
+    {
+      "id": "ecom-outlier-1",
+      "dataset": "ecommerce",
+      "question": "Are there any statistical outliers in revenue?",
+      "category": "detect_outliers",
+      "expected_value": 6,
+      "value_description": "revenue outlier count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_outliers",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the revenue column contains statistical outliers. Six rows, representing about 5% of the 120 records, fall outside the IQR\u2011based bounds (below -1,315.54 or above 3,566.75). The most extreme case is a revenue of 449,910, which is far above the upper bound. These values may be legitimate high\u2011value orders but merit a closer look.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3274,
+        "total_tokens": 7937,
+        "call_count": 3,
+        "groq_reported_ms": 1855
+      }
+    },
+    {
+      "id": "ecom-outlier-2",
+      "dataset": "ecommerce",
+      "question": "Are there outliers in the unit price column?",
+      "category": "detect_outliers",
+      "expected_value": 1,
+      "value_description": "unit_price outlier count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_outliers",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the unit_price column contains a statistical outlier. Only one record (0.83% of the 120 rows) has a unit price of 4,999, which lies far beyond the IQR\u2011based upper bound of 1,267. This extreme value may be a data entry error or a genuine high\u2011value sale, and would merit further review.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3063,
+        "total_tokens": 3291,
+        "call_count": 2,
+        "groq_reported_ms": 400
+      }
+    },
+    {
+      "id": "ecom-logical-1",
+      "dataset": "ecommerce",
+      "question": "Are there any impossible or invalid customer ages?",
+      "category": "detect_logical_violations",
+      "expected_value": 2,
+      "value_description": "invalid age count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_logical_violations",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the dataset contains impossible customer ages. Two records have ages that fall outside a realistic human range (one is -4 years old and another is 143 years old). These ages violate the expected 0\u2011120 year rule and affect 2 out of the 120 total rows. This suggests data entry errors that should be reviewed and corrected.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 35619,
+        "total_tokens": 4983,
+        "call_count": 3,
+        "groq_reported_ms": 792
+      }
+    },
+    {
+      "id": "ecom-anomaly-1",
+      "dataset": "ecommerce",
+      "question": "Find the most important anomalies in this dataset.",
+      "category": "detect_anomalies",
+      "expected_value": 4,
+      "value_description": "duplicate rows (one real anomaly among several)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_anomalies",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset shows several notable data quality issues. Two records have impossible customer ages (negative and over 120), indicating logical violations. There are 4 duplicate rows (3.33% of the data) and a high number of repeated customer IDs (82 duplicates), suggesting possible identity or transaction duplication. Missing values affect 6 rows (5%) in the region column, which could hinder regional analysis. Revenue outliers are the most prevalent numeric anomaly, with 6 rows (5%) falling far outside the expected range, potentially distorting financial summaries.",
+        "findings_total": 6,
+        "findings_verified": 6,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 29523,
+        "total_tokens": 3636,
+        "call_count": 2,
+        "groq_reported_ms": 781
+      }
+    },
+    {
+      "id": "ecom-corr-1",
+      "dataset": "ecommerce",
+      "question": "How correlated are units sold and revenue?",
+      "category": "calculate_correlation",
+      "expected_value": 0.9889,
+      "value_description": "units/revenue correlation",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "calculate_correlation"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The Pearson correlation between units sold and revenue is 0.9889, indicating a very strong positive linear relationship. This suggests that higher unit counts are closely associated with higher revenue values in the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2783,
+        "total_tokens": 3542,
+        "call_count": 2,
+        "groq_reported_ms": 850
+      }
+    },
+    {
+      "id": "ecom-corr-2",
+      "dataset": "ecommerce",
+      "question": "Is customer age correlated with revenue?",
+      "category": "calculate_correlation",
+      "expected_value": -0.027,
+      "value_description": "age/revenue correlation",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "calculate_correlation"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The Pearson correlation between customer age and revenue is -0.027, which is essentially zero. This suggests there is no meaningful linear relationship between a customer's age and the revenue they generate. In practical terms, age does not appear to be a driver of revenue in this dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2756,
+        "total_tokens": 3611,
+        "call_count": 2,
+        "groq_reported_ms": 1004
+      }
+    },
+    {
+      "id": "ecom-timeseries-1",
+      "dataset": "ecommerce",
+      "question": "Show total revenue by month over time.",
+      "category": "time_series_analysis",
+      "expected_value": 12,
+      "value_description": "number of monthly buckets",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "time_series_analysis"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "The monthly revenue series shows a clear upward trajectory, with total revenue rising from about 12,363 in January to roughly 165,592 by December 2024. The most pronounced jump occurs in November 2024, where revenue spikes to 457,037, far exceeding the surrounding months. Overall, the trend indicates a 34.21% increase over the period, suggesting growing sales or a seasonal effect. The November spike may warrant further investigation to understand its drivers. Apart from that, the month\u2011to\u2011month growth appears consistent.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 4139,
+        "total_tokens": 4113,
+        "call_count": 2,
+        "groq_reported_ms": 2755
+      }
+    },
+    {
+      "id": "ecom-compare-1",
+      "dataset": "ecommerce",
+      "question": "Compare average revenue between regions.",
+      "category": "compare_groups",
+      "expected_value": "North",
+      "value_description": "region with highest average revenue",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_unique_values",
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "North region\u2019s average revenue (~12,910) is far higher than the other regions, which all hover around 1,080\u20131,190. East, South, and West have similar averages, differing by less than 120. The rows with missing region have a lower average (~1,060) but represent only about 5\u202f% of the data. This suggests a strong regional disparity in revenue performance.",
+        "findings_total": 4,
+        "findings_verified": 4,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 74864,
+        "total_tokens": 21034,
+        "call_count": 7,
+        "groq_reported_ms": 6354
+      }
+    },
+    {
+      "id": "ecom-formula-1",
+      "dataset": "ecommerce",
+      "question": "Does the revenue column actually match units times unit price minus the discount?",
+      "category": "validate_formula",
+      "expected_value": 1,
+      "value_description": "formula mismatch count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "validate_formula"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The revenue values align with the calculation units\u202f\u00d7\u202funit_price\u202f\u00d7\u202f(1\u202f-\u202fdiscount_pct/100) for virtually the entire dataset, with only a single record deviating. This suggests the revenue column is generally accurate, though the outlier may warrant a quick review to confirm if it reflects a data entry error or a special case.",
+        "findings_total": 1,
+        "findings_verified": 0,
+        "findings_unverified": 1,
+        "warnings": [
+          "Could not verify the numbers behind: \"Revenue matches the expected formula for 119 of 120 rows\" \u2014 shown with lower confidence."
+        ],
+        "latency_ms": 2481,
+        "total_tokens": 3721,
+        "call_count": 2,
+        "groq_reported_ms": 1508
+      }
+    },
+    {
+      "id": "ecom-formula-2",
+      "dataset": "ecommerce",
+      "question": "Check whether revenue calculations are correct across all orders.",
+      "category": "validate_formula",
+      "expected_value": 1,
+      "value_description": "formula mismatch count (rephrased)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "validate_formula"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The revenue values match the expected calculation of units\u202f\u00d7\u202funit_price\u202f\u00d7\u202f(1\u202f-\u202fdiscount_pct/100) for virtually all orders, with only a single record showing a discrepancy. This represents less than 1% of the 120 rows, suggesting the overall revenue data is reliable but that one outlier should be investigated.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3722,
+        "total_tokens": 3659,
+        "call_count": 2,
+        "groq_reported_ms": 2656
+      }
+    },
+    {
+      "id": "ecom-top-1",
+      "dataset": "ecommerce",
+      "question": "What are the top 5 highest-revenue orders?",
+      "category": "get_top_records",
+      "expected_value": "ORD0041",
+      "value_description": "highest-revenue order id",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_top_records"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The five orders generating the highest revenue are ORD0041 (\u20b9449,910), ORD0010 (\u20b93,932.65), ORD0018 (\u20b93,749.95), ORD0017 (\u20b93,703.70), and ORD0092 (\u20b93,666.15). ORD0041 stands out with a revenue far above the rest, driven by 90 units at the maximum unit price of 4,999. The remaining four orders are all around 5 units with unit prices in the high\u2011700s and no discount applied. These top records represent 5 out of the 120 total orders in the dataset.",
+        "findings_total": 0,
+        "findings_verified": 0,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 6407,
+        "total_tokens": 8736,
+        "call_count": 3,
+        "groq_reported_ms": 4896
+      }
+    },
+    {
+      "id": "ecom-bottom-1",
+      "dataset": "ecommerce",
+      "question": "What are the 5 lowest-revenue orders?",
+      "category": "get_bottom_records",
+      "expected_value": "ORD0031",
+      "value_description": "lowest-revenue order id",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_bottom_records",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The five orders with the smallest revenue are: ORD0031 (revenue\u202f=\u202f0.0), ORD0075 (156.38), ORD0069 (157.26), ORD0055 (166.17) and ORD0104 (186.34). The lowest\u2011revenue order, ORD0031, recorded zero revenue, which may warrant a business\u2011process check.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 5326,
+        "total_tokens": 8002,
+        "call_count": 3,
+        "groq_reported_ms": 3237
+      }
+    },
+    {
+      "id": "ecom-multi-1",
+      "dataset": "ecommerce",
+      "question": "Is the unusually high revenue in this dataset caused by bad data or a real large order?",
+      "category": "multi_step",
+      "expected_value": "ORD0041",
+      "value_description": "the real large order behind the revenue outlier",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_outliers",
+          "validate_formula"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The unusually high revenue is mainly due to a genuine large order rather than systematic bad data. Six rows (5% of the dataset) are statistical outliers in revenue, and the biggest outlier (order ORD0041 with 449,910 revenue) matches the expected calculation of units\u202f\u00d7\u202funit_price. Only one row shows a revenue mismatch, indicating a separate data entry error. Thus, the high total revenue likely reflects a real large transaction, with a minor isolated data quality issue.",
+        "findings_total": 3,
+        "findings_verified": 3,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 5503,
+        "total_tokens": 7116,
+        "call_count": 3,
+        "groq_reported_ms": 3650
+      }
+    },
+    {
+      "id": "ecom-multi-2",
+      "dataset": "ecommerce",
+      "question": "Give me a complete executive summary of this dataset's data quality.",
+      "category": "multi_step",
+      "expected_value": 4,
+      "value_description": "duplicate rows (one of several quality issues expected)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_anomalies",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset comprises 120 rows. Missing data is confined to the region column, with 6 rows (5%) lacking a value. There are 4 exact duplicate rows (3.33%) and 3 order IDs that appear more than once, indicating potential key integrity concerns. Outlier detection flags a small set of extreme values: one unit, one unit_price, six revenue, and one customer_age record, together representing up to 5% of rows. Logical checks reveal two customer_age entries (-4 and 143) outside the plausible 0\u2011120 range. Overall data quality is solid but these issues should be addressed before downstream analysis.",
+        "findings_total": 8,
+        "findings_verified": 8,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 7972,
+        "total_tokens": 9745,
+        "call_count": 3,
+        "groq_reported_ms": 6359
+      }
+    },
+    {
+      "id": "ecom-sql-1",
+      "dataset": "ecommerce",
+      "question": "Show total units and revenue per category, sorted by revenue descending.",
+      "category": "nl_to_sql",
+      "expected_value": "Electronics",
+      "value_description": "top category by revenue (via SQL)",
+      "analyze": {
+        "tool_correct": false,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The data shows that Electronics leads both in total units sold (152) and total revenue (\u2248\u202f476,566). Home follows with 77 units and about 33,959 in revenue, then Sports with 80 units and roughly 31,198 revenue. Beauty contributed 63 units for about 30,741 revenue, and Books had the fewest units (53) and generated around 23,314 revenue. The categories are ordered by descending revenue as requested.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3414,
+        "total_tokens": 5401,
+        "call_count": 3,
+        "groq_reported_ms": 2040
+      },
+      "nl_to_sql": {
+        "value_correct": true,
+        "answer": "Electronics generated the highest revenue, with 152 units sold for $476,565.60. The next highest is Home, with 77 units and $33,959.03 in revenue, followed by Sports at 80 units and $31,197.70, Beauty at 63 units and $30,740.70, and finally Books with 53 units and $23,314.13.",
+        "generated_sql": "SELECT category, SUM(units) AS total_units, SUM(revenue) AS total_revenue FROM dataset GROUP BY category ORDER BY total_revenue DESC LIMIT 10000",
+        "latency_ms": 1422,
+        "total_tokens": 970
+      }
+    },
+    {
+      "id": "ecom-sql-2",
+      "dataset": "ecommerce",
+      "question": "What's the average revenue for delivered orders in the Electronics category?",
+      "category": "nl_to_sql",
+      "expected_value": 23515.47,
+      "value_description": "avg revenue, delivered Electronics orders",
+      "analyze": {
+        "tool_correct": false,
+        "tools_used": [
+          "get_dataset_profile",
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The average revenue for delivered orders in the Electronics category is about 23,515.47 (currency units). This figure comes from 20 delivered Electronics orders, which represent a subset of the 120 total rows in the dataset. The calculation used the revenue column filtered by status='delivered' and category='Electronics'.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 28502,
+        "total_tokens": 15134,
+        "call_count": 7,
+        "groq_reported_ms": 4250
+      },
+      "nl_to_sql": {
+        "value_correct": true,
+        "answer": "The average revenue for delivered orders in the Electronics category is approximately\u202f$23,515.47. This figure comes directly from the data you provided.",
+        "generated_sql": "SELECT AVG(revenue) FROM dataset WHERE status = 'delivered' AND category = 'Electronics' LIMIT 10000",
+        "latency_ms": 2259,
+        "total_tokens": 788
+      }
+    },
+    {
+      "id": "emp-profile-1",
+      "dataset": "employees",
+      "question": "Summarize this employee dataset.",
+      "category": "get_dataset_profile",
+      "expected_value": 100,
+      "value_description": "row count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset contains 100 employee records across eight columns. There are five departments, with Engineering (24 records) and Sales (22) being the largest groups. Salary data has 4 missing entries and one statistical outlier above the IQR upper bound. Three rows are exact duplicates, representing 3% of the data. Correlations between age, salary, experience, and performance are all weak (all under 0.18), suggesting limited linear relationships among these variables.",
+        "findings_total": 7,
+        "findings_verified": 7,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 5641,
+        "total_tokens": 5085,
+        "call_count": 2,
+        "groq_reported_ms": 2846
+      }
+    },
+    {
+      "id": "emp-colstats-1",
+      "dataset": "employees",
+      "question": "What's the average salary?",
+      "category": "get_column_statistics",
+      "expected_value": 103748.8,
+      "value_description": "mean salary",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_column_statistics",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The average salary across the 100 employee records is 103,748.80 (units as recorded). This figure accounts for the four missing salary entries, which were excluded from the calculation. The mean reflects a fairly wide spread, with a standard deviation of about 93,987, indicating considerable variability in compensation levels.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 22690,
+        "total_tokens": 5991,
+        "call_count": 3,
+        "groq_reported_ms": 984
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "The average salary in the dataset is approximately\u202f103,748.80.",
+        "latency_ms": 2196,
+        "total_tokens": 964
+      }
+    },
+    {
+      "id": "emp-colstats-2",
+      "dataset": "employees",
+      "question": "What's the median years of experience?",
+      "category": "get_column_statistics",
+      "expected_value": 15.3,
+      "value_description": "median years of experience",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_column_statistics",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The median years of experience across the 100 employees is 15.3 years. This value sits between the first and third quartiles (8.1 and 18.6 years), indicating a fairly symmetric distribution. No missing values were found for this column, and the overall spread (standard deviation) is about 7.06 years.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 18259,
+        "total_tokens": 5966,
+        "call_count": 3,
+        "groq_reported_ms": 941
+      }
+    },
+    {
+      "id": "emp-missing-1",
+      "dataset": "employees",
+      "question": "Which columns have missing values, and how many?",
+      "category": "get_missing_values",
+      "expected_value": 4,
+      "value_description": "missing count in salary",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_missing_values"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Only the salary column contains missing values, with four rows lacking a salary entry, representing 4% of the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2182,
+        "total_tokens": 1497,
+        "call_count": 1,
+        "groq_reported_ms": 121
+      }
+    },
+    {
+      "id": "emp-dup-1",
+      "dataset": "employees",
+      "question": "Are there any duplicate employee records?",
+      "category": "get_duplicates",
+      "expected_value": 3,
+      "value_description": "duplicate row count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_duplicates"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the dataset contains duplicate employee records. Three rows (3% of the 100 rows) are exact duplicates based on the employee_id and hire_date fields. This suggests that some employee entries were entered more than once and may need de\u2011duplication before analysis.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3416,
+        "total_tokens": 6060,
+        "call_count": 3,
+        "groq_reported_ms": 1388
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "Yes, there is a duplicate record. Employee\u202fE0001 appears three times, while every other employee ID in the list appears only once.",
+        "latency_ms": 14390,
+        "total_tokens": 1607
+      }
+    },
+    {
+      "id": "emp-dup-2",
+      "dataset": "employees",
+      "question": "Are there any duplicate employee IDs?",
+      "category": "get_duplicates",
+      "expected_value": 2,
+      "value_description": "duplicate employee_id count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "get_duplicates"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "Yes, there are duplicate employee IDs. The ID \"E0001\" appears three times, accounting for three rows out of the 100\u2011row dataset (3% duplicate rows). This suggests a data quality issue that should be investigated, such as whether these rows represent the same employee entered multiple times or distinct records that need unique IDs.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2045,
+        "total_tokens": 6297,
+        "call_count": 3,
+        "groq_reported_ms": 1086
+      }
+    },
+    {
+      "id": "emp-unique-1",
+      "dataset": "employees",
+      "question": "What departments exist in this dataset?",
+      "category": "get_unique_values",
+      "expected_value": [
+        "Engineering",
+        "Finance",
+        "Marketing",
+        "Sales",
+        "Support"
+      ],
+      "value_description": "distinct departments",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_unique_values"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset contains five departments: Finance, Marketing, Support, Sales, and Engineering.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 1884,
+        "total_tokens": 3286,
+        "call_count": 2,
+        "groq_reported_ms": 801
+      }
+    },
+    {
+      "id": "emp-group-1",
+      "dataset": "employees",
+      "question": "What's the average salary by department? Which department pays the most?",
+      "category": "group_by_aggregate",
+      "expected_value": "Engineering",
+      "value_description": "top-paying department",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The average salary varies across departments, with Engineering leading at about 131,983, followed by Marketing at roughly 108,590, Support at 105,411, Finance at 85,345, and Sales at 83,177. Engineering therefore pays the most on average. These figures are based on the current dataset and reflect the mean salary for each department.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 4697,
+        "total_tokens": 3845,
+        "call_count": 2,
+        "groq_reported_ms": 1846
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "The average salaries are: Engineering\u202f\u2248\u202f$131,982.94, Marketing\u202f\u2248\u202f$108,589.60, Support\u202f\u2248\u202f$105,410.74, Finance\u202f\u2248\u202f$85,345.40, and Sales\u202f\u2248\u202f$83,177.43. Engineering has the highest average salary, at about $131,983.",
+        "latency_ms": 1947,
+        "total_tokens": 1182
+      }
+    },
+    {
+      "id": "emp-group-2",
+      "dataset": "employees",
+      "question": "How many employees are in each department?",
+      "category": "group_by_aggregate",
+      "expected_value": 24,
+      "value_description": "largest department headcount",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "There are 24 employees in Engineering, 22 in Sales, 20 in Finance, 18 in Marketing, and 16 in Support, making a total of 100 employees across all departments.",
+        "findings_total": 5,
+        "findings_verified": 0,
+        "findings_unverified": 5,
+        "warnings": [
+          "Could not verify the numbers behind: \"Engineering department employee count\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Sales department employee count\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Finance department employee count\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Marketing department employee count\" \u2014 shown with lower confidence.",
+          "Could not verify the numbers behind: \"Support department employee count\" \u2014 shown with lower confidence."
+        ],
+        "latency_ms": 10699,
+        "total_tokens": 8471,
+        "call_count": 5,
+        "groq_reported_ms": 2263
+      },
+      "ask": {
+        "error": "AiResponseError: The AI provider request failed."
+      }
+    },
+    {
+      "id": "emp-filter-1",
+      "dataset": "employees",
+      "question": "How many employees work remotely?",
+      "category": "filter_rows",
+      "expected_value": 20,
+      "value_description": "remote employee count",
+      "analyze": {
+        "error": "provider unavailable: RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01k0rjhjywep1rk67w4wesmq7q` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199783, Requested 1872. Please try again in 11m54.959999999s. Need more to",
+        "provider_unavailable": true,
+        "daily_quota_hit": true
+      }
+    }
+  ]
+}
