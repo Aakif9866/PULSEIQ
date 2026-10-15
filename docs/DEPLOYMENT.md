@@ -17,13 +17,18 @@ its trial ended, and Railway removed both PulseIQ deployments on
 found". The account owner chose Render's free tier over paying for
 Railway Hobby. The Railway sections below are kept as history.
 
+**Service names (2026-10-15):** the original `pulseiq-api` / `pulseiq`
+subdomains are held by suspended services outside the owner's account
+(`x-render-routing: suspend-by-user`), so the Blueprint uses
+`pulseiq-aakif-api` / `pulseiq-aakif`, checked unclaimed (`no-server`).
+
 **Topology** (`render.yaml`, a Render Blueprint at the repo root,
 deploying branch `feature/pulseiq-v2-roadmap`):
 
 | Piece | Render type | Notes |
 |---|---|---|
-| Backend `pulseiq-api` | Free web service, Docker (`backend/Dockerfile`, unchanged) | Sleeps after 15 min idle; the first request after that waits about a minute. `PORT` is injected (10000) and already honored. |
-| Frontend `pulseiq` | Free static site (`npm ci && npm run build`, publishes `dist`) | Never sleeps. A `/* → /index.html` rewrite handles SPA routes. It calls the backend directly through `VITE_API_URL`, so nginx isn't used. |
+| Backend `pulseiq-aakif-api` | Free web service, Docker (`backend/Dockerfile`, unchanged) | Sleeps after 15 min idle; the first request after that waits about a minute. `PORT` is injected (10000) and already honored. |
+| Frontend `pulseiq-aakif` | Free static site (`npm ci && npm run build`, publishes `dist`) | Never sleeps. A `/* → /index.html` rewrite handles SPA routes. It calls the backend directly through `VITE_API_URL`, so nginx isn't used. |
 | Storage | Cloudflare R2, bucket `pulse-iq` | Uploads survive sleeps and redeploys. Verified against the real bucket, including a container rebuild (`docs/STORAGE.md`). |
 | Database | Neon (unchanged) | Already at migration 0008; the image's `CMD` applies 0009 on first boot. |
 
@@ -31,13 +36,13 @@ deploying branch `feature/pulseiq-v2-roadmap`):
 run --memory=512m -e PORT=10000`, against a throwaway Postgres): migrations
 ran from empty, the demo seeder created the user, dataset, and dashboard
 chart, health returned 200 with `access-control-allow-origin:
-https://pulseiq.onrender.com`, and demo login, dataset detail, suggested
+https://pulseiq-aakif.onrender.com`, and demo login, dataset detail, suggested
 queries, NL-to-SQL, dashboards, and `/analyze` (a degraded 200 with a
 dummy key) all worked. Memory was 110 MiB idle and 196 MiB at peak, well
 under the free tier's 512 MiB. `MAX_UPLOAD_SIZE_MB` is lowered to 25 for
 that limit. The static build was checked separately: with the Blueprint's
 `VITE_API_URL` set, the bundle contains
-`pulseiq-api.onrender.com/api/v1`.
+`pulseiq-aakif-api.onrender.com/api/v1`.
 
 **Not verified yet:** anything on Render itself. That needs the account
 owner's Render login.
@@ -54,7 +59,7 @@ owner's Render login.
 3. Apply. If Render gives either service a suffixed URL because the name
    is taken, put the real URLs into `VITE_API_URL` (frontend) and
    `CORS_ORIGINS` (backend), then redeploy both.
-4. Check `https://pulseiq-api.onrender.com/api/v1/health` →
+4. Check `https://pulseiq-aakif-api.onrender.com/api/v1/health` →
    `{"status":"ok",...}`, then log in as the demo user on the frontend.
 
 ## Current deployment mode

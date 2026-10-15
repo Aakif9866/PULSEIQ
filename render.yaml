@@ -5,7 +5,7 @@
 # VITE_API_URL and CORS_ORIGINS below to match, and redeploy both.
 services:
   - type: web
-    name: pulseiq-api
+    name: pulseiq-aakif-api
     runtime: docker
     plan: free
     branch: feature/pulseiq-v2-roadmap
@@ -49,10 +49,10 @@ services:
       - key: DEMO_USER_EMAIL
         value: demo@pulseiq.dev
       - key: CORS_ORIGINS
-        value: '["https://pulseiq.onrender.com"]'
+        value: '["https://pulseiq-aakif.onrender.com"]'
 
   - type: web
-    name: pulseiq
+    name: pulseiq-aakif
     runtime: static
     branch: feature/pulseiq-v2-roadmap
     rootDir: frontend
@@ -60,7 +60,7 @@ services:
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
-        value: https://pulseiq-api.onrender.com/api/v1
+        value: https://pulseiq-aakif-api.onrender.com/api/v1
     routes:
       - type: rewrite
         source: /*
