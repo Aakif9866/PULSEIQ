@@ -290,9 +290,9 @@ alternatives, 3 interview questions to be ready for).
       false "there is no SQL/DuckDB anywhere in this codebase" claim in
       both `docs/ARCHITECTURE.md` and `docs/AI_ANALYTICS.md` — both
       predated V2's NL-to-SQL and were never updated after it shipped.
-- [~] **Step 3 — Evaluation harness (built and verified; full live
-      results run in progress, blocked partway by a real external
-      limit).** `evals/` built: 51 questions across 2 deterministically-
+- [x] **Step 3 — Evaluation harness.** *(Full 51-question live run
+      completed 2026-10-15: 86.3% value accuracy, 100% tool selection —
+      `docs/EVALS.md`.)* `evals/` built: 51 questions across 2 deterministically-
       generated sample datasets, ground truth computed by calling
       `app.ai.tools` directly (never the LLM), covering all 16 tools,
       NL-to-SQL, and 4 multi-step questions; a runner that scores
@@ -369,9 +369,8 @@ alternatives, 3 interview questions to be ready for).
       under a minute.
 - [~] **Step 7 — Portfolio packaging** *(README and docs/RESUME.md written, every claim
       checked against the code and every number sourced — see RESUME.md's source table.
-      Two items outstanding: the short GIF needs a human screen recording (no browser or
-      recording tool in this environment), and the eval results table holds a partial run, 36 of 51
-      questions on 2026-10-14; it finishes with `--resume`)*. Original scope: Rewrite `README.md` — one-line
+      One item outstanding: the short GIF needs a human screen recording (no browser or
+      recording tool in this environment). The eval table now holds the complete 51-question run)*. Original scope: Rewrite `README.md` — one-line
       pitch, live demo link, short GIF, Mermaid architecture diagram, eval
       results table, "key engineering decisions" (deterministic tools +
       validator over free-form answers, how NL-to-SQL stays safe, how rate

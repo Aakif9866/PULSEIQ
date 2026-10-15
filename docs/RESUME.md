@@ -42,7 +42,8 @@ rather than language-model guesses.
 | 316 / 24 | backend / frontend tests | `pytest` / `vitest` runs at the Phase 8 step 6 commit |
 | 1 | outage-handling bug found via tracing | `docs/BUGS.md` BUG-017 |
 
-**Numbers deliberately not claimed yet:** answer accuracy and validator
-catch rates. The 2026-10-14 run reached 36 of 51 questions (88.9% value
-accuracy on those) before Groq's daily cap (`docs/EVALS.md`). Quote a
-percentage on a resume only once all 51 are done.
+**Eval numbers, now quotable:** the full 51-question run (2026-10-15)
+scored 86.3% value accuracy (44/51) and 100% tool selection; the
+validator flagged 10.2% of findings as unverified (`docs/EVALS.md`,
+`evals/results/full_run.json`). Single run, one model, n=51; say so if
+asked.

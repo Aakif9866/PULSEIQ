@@ -85,25 +85,22 @@ A 51-question harness ([`evals/`](evals/)) over two generated datasets
 covers all 16 tools, NL-to-SQL, and multi-step questions, with ground
 truth computed by the app's own tools — never by the model.
 
-**Honest status: partial run.** The 2026-10-14 run answered 36 of 51
-questions before Groq's free-tier limit of 200,000 tokens per day stopped
-it. Its numbers cover only those 36, from
+Full run of 2026-10-15, all 51 questions answered, from
 [`evals/results/full_run.json`](evals/results/full_run.json):
 
-| Measurement (36 answered questions) | Result |
+| Measurement (51 questions) | Result |
 |---|---|
-| Value accuracy | 32 / 36 (88.9%) |
+| Value accuracy | 44 / 51 (86.3%) |
 | Tool-selection accuracy | 100% |
-| Findings the validator flagged as unverified | 11 of 74 (14.9%) |
-| Avg tokens / latency per question | 6,055 / 10.0 s |
+| Findings the validator flagged as unverified | 11 of 108 (10.2%) |
+| Avg tokens / latency per question | 6,365 / 11.3 s |
 | Tokens for a repeated question | 0 (served from cache; tests) |
 
-The remaining 15 questions run with `--resume` once the quota resets.
 [`docs/EVALS.md`](docs/EVALS.md) has the breakdown.
 
 ## Engineering quality
 
-- **316** backend tests and **24** frontend tests; ruff, mypy, tsc, and
+- **316** backend tests and **26** frontend tests; ruff, mypy, tsc, and
   oxlint clean.
 - CI on every pull request: backend, frontend, the eval harness's
   deterministic checks, and Docker image builds.

@@ -3,9 +3,9 @@
 docs/PHASES.md Phase 8, step 3. Every number in this document comes from
 a real, committed run of `evals/runner.py` against live Groq — the raw
 per-question output backing it is checked into
-`evals/results/full_run.json`, not summarized-then-discarded. **Results
-below are placeholders until that run finishes and is recorded — see the
-"Results" section's timestamp.**
+`evals/results/full_run.json`, not summarized-then-discarded. **The full
+51-question run completed on 2026-10-15; see "Complete run" under
+Results.**
 
 ## What this harness does, and doesn't, prove
 
@@ -112,10 +112,31 @@ regardless of which of the three paths made it.
 
 ## Results
 
-**Status as of 2026-09-25: partial — the full 51-question run has not
-yet completed. This is stated honestly rather than filled with
-estimated numbers; see "What happened" below for exactly why and what
-is verified so far.**
+### Complete run (2026-10-15): 51 of 51
+
+The 2026-10-14 run (36 answered) was finished with `--resume`; the 15
+remaining questions all succeeded, with no provider failures. Numbers
+cover all 51 (`evals/results/full_run.json`, `summary`):
+
+| Metric | Value |
+|---|---|
+| `/analyze` succeeded / failed | 51 / 0 |
+| Value accuracy | 44 / 51 (86.3%) |
+| Tool-selection accuracy | 100% |
+| Findings returned (verified / unverified) | 97 / 11 (108 total) |
+| Validator flagged (% of findings) | 10.2% |
+| Avg latency / question | 11.3 s |
+| Avg tokens / question | 6,365 |
+| Avg tool calls / question | 2.9 |
+
+Wrong answers: `ecom-dup-2`, `ecom-filter-1`, `ecom-timeseries-1`,
+`emp-dup-2`, `emp-timeseries-1`, `emp-top-1`, `emp-multi-1`. Duplicate
+detection and time series account for 4 of the 7.
+
+`/ask` vs `/analyze` on the subset both can answer (n=11): value
+accuracy 81.8% vs 90.9%; average tokens 1,338 vs 5,432.
+
+The sections below are the history of how the run got here.
 
 ### What happened
 
@@ -219,9 +240,7 @@ On this small subset, `/analyze` costs about 4x the tokens for the same
 accuracy. What it adds is the validator and the tool trace, not
 accuracy on simple questions.
 
-To finish: `python ../evals/runner.py --sleep 30 --out
-../evals/results/full_run.json --resume` from `backend/` once the quota
-resets.
+Finished on 2026-10-15; see "Complete run" above.
 
 ## Reproducing this run
 

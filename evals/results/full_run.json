@@ -1,21 +1,21 @@
 {
   "summary": {
-    "total_questions": 37,
-    "analyze_succeeded": 36,
-    "analyze_failed": 1,
-    "analyze_value_accuracy_pct": 88.9,
+    "total_questions": 51,
+    "analyze_succeeded": 51,
+    "analyze_failed": 0,
+    "analyze_value_accuracy_pct": 86.3,
     "analyze_tool_selection_accuracy_pct": 100.0,
-    "validator_flagged_pct_of_findings": 14.9,
-    "findings_total": 74,
+    "validator_flagged_pct_of_findings": 10.2,
+    "findings_total": 108,
     "findings_unverified": 11,
-    "avg_latency_ms": 10002.0,
-    "avg_tokens_per_question": 6055.0,
-    "avg_tool_calls_per_question": 2.8,
-    "ask_vs_analyze_comparable_questions": 9,
-    "ask_value_accuracy_pct": 88.9,
-    "analyze_value_accuracy_on_comparable_subset_pct": 88.9,
-    "ask_avg_tokens": 1411.0,
-    "analyze_avg_tokens_on_comparable_subset": 5755.0
+    "avg_latency_ms": 11294.0,
+    "avg_tokens_per_question": 6365.0,
+    "avg_tool_calls_per_question": 2.9,
+    "ask_vs_analyze_comparable_questions": 11,
+    "ask_value_accuracy_pct": 81.8,
+    "analyze_value_accuracy_on_comparable_subset_pct": 90.9,
+    "ask_avg_tokens": 1338.0,
+    "analyze_avg_tokens_on_comparable_subset": 5432.0
   },
   "results": [
     {
@@ -1042,9 +1042,409 @@
       "expected_value": 20,
       "value_description": "remote employee count",
       "analyze": {
-        "error": "provider unavailable: RateLimitError: Error code: 429 - {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01k0rjhjywep1rk67w4wesmq7q` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 199783, Requested 1872. Please try again in 11m54.959999999s. Need more to",
-        "provider_unavailable": true,
-        "daily_quota_hit": true
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "There are 20 employees who work remotely out of the 100 employees in the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 1830,
+        "total_tokens": 3996,
+        "call_count": 2,
+        "groq_reported_ms": 871
+      },
+      "ask": {
+        "value_correct": false,
+        "answer": "There are 50 employees who work remotely.",
+        "latency_ms": 1126,
+        "total_tokens": 982
+      }
+    },
+    {
+      "id": "emp-filter-2",
+      "dataset": "employees",
+      "question": "How many employees have a performance score of 5?",
+      "category": "filter_rows",
+      "expected_value": 19,
+      "value_description": "top-performer count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "There are 19 employees in the dataset with a performance score of 5 out of a total of 100 employees.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 1512,
+        "total_tokens": 3960,
+        "call_count": 2,
+        "groq_reported_ms": 768
+      },
+      "ask": {
+        "value_correct": true,
+        "answer": "There are 19 employees who have a performance score of 5. This figure comes directly from the data you provided.",
+        "latency_ms": 1414,
+        "total_tokens": 1030
+      }
+    },
+    {
+      "id": "emp-outlier-1",
+      "dataset": "employees",
+      "question": "Are there any salary outliers in this dataset?",
+      "category": "detect_outliers",
+      "expected_value": 1,
+      "value_description": "salary outlier count",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_outliers",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Yes, the salary column contains a statistical outlier. Using the IQR method, one employee's salary of 950,000 exceeds the upper bound of 218,849.24, representing about 1% of the 100 rows. This outlier may be a legitimate high\u2011earning case, but it stands out from the typical salary range.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3059,
+        "total_tokens": 6294,
+        "call_count": 3,
+        "groq_reported_ms": 1642
+      }
+    },
+    {
+      "id": "emp-logical-1",
+      "dataset": "employees",
+      "question": "Are there any employees with an invalid or out-of-range age?",
+      "category": "detect_logical_violations",
+      "expected_value": 0,
+      "value_description": "age rule-violation count (0 expected \u2014 a 4-year-old employee is implausible but numerically within the tool's generic 0-120 rule; a real finding either way)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_logical_violations",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "There are no employees with an invalid or out\u2011of\u2011range age; all 100 records have ages that satisfy the logical bounds defined for the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 15428,
+        "total_tokens": 7695,
+        "call_count": 4,
+        "groq_reported_ms": 1929
+      }
+    },
+    {
+      "id": "emp-anomaly-1",
+      "dataset": "employees",
+      "question": "Find anomalies in this employee dataset.",
+      "category": "detect_anomalies",
+      "expected_value": 3,
+      "value_description": "duplicate rows (one real anomaly among several)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_anomalies",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset shows a few data quality issues. One employee has a salary far beyond the typical range, and one performance_score is unusually high, each affecting about 1% of rows. There are three exact duplicate records, representing 3% of the data, and four salary entries are missing (4% of rows). No logical violations were detected, but these anomalies may warrant further review.",
+        "findings_total": 4,
+        "findings_verified": 4,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 7902,
+        "total_tokens": 6740,
+        "call_count": 3,
+        "groq_reported_ms": 3655
+      }
+    },
+    {
+      "id": "emp-corr-1",
+      "dataset": "employees",
+      "question": "Is there a correlation between years of experience and salary?",
+      "category": "calculate_correlation",
+      "expected_value": -0.1125,
+      "value_description": "experience/salary correlation",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "calculate_correlation",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The Pearson correlation between years of experience and salary is -0.1125, indicating a very weak negative relationship. In other words, more years of experience are not associated with higher salaries in this dataset, and the trend is slightly opposite. This correlation is small enough that it may not be practically significant, but it does suggest that factors other than tenure are driving pay levels.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3364,
+        "total_tokens": 6804,
+        "call_count": 3,
+        "groq_reported_ms": 2001
+      }
+    },
+    {
+      "id": "emp-corr-2",
+      "dataset": "employees",
+      "question": "Is age correlated with performance score?",
+      "category": "calculate_correlation",
+      "expected_value": 0.0858,
+      "value_description": "age/performance correlation",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "calculate_correlation",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The Pearson correlation between age and performance_score is 0.0858, indicating a very weak positive relationship. This suggests that age does not meaningfully predict performance scores in this employee dataset. The correlation is close to zero, so any observed association is likely negligible for practical decision\u2011making.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3051,
+        "total_tokens": 6405,
+        "call_count": 3,
+        "groq_reported_ms": 1659
+      }
+    },
+    {
+      "id": "emp-timeseries-1",
+      "dataset": "employees",
+      "question": "Show total salary by hire month over time.",
+      "category": "time_series_analysis",
+      "expected_value": 62,
+      "value_description": "number of monthly hire buckets",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_dataset_profile",
+          "time_series_analysis"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "The monthly sum of salaries shows a clear downward trend, with total payroll decreasing about 68% from the earliest to the most recent month. The peak month was July 2015, where the total salary paid was $994,947.59, while the trough was August 2019 with a $0 total (no hires that month). Note that four salary records are missing (4% of rows), which could slightly affect the monthly totals, and one salary value was flagged as a statistical outlier.",
+        "findings_total": 5,
+        "findings_verified": 5,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 26337,
+        "total_tokens": 9543,
+        "call_count": 3,
+        "groq_reported_ms": 3863
+      }
+    },
+    {
+      "id": "emp-compare-1",
+      "dataset": "employees",
+      "question": "Compare average years of experience across departments.",
+      "category": "compare_groups",
+      "expected_value": "Engineering",
+      "value_description": "most-experienced department on average",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The Engineering department shows the highest average years of experience at about 15.68 years, while Finance has the lowest at roughly 9.91 years. Sales, Support, and Marketing fall in between, with averages of 14.29, 14.47, and 12.91 years respectively. This suggests that seniority is concentrated in Engineering relative to the other functions.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2728,
+        "total_tokens": 3665,
+        "call_count": 2,
+        "groq_reported_ms": 1781
+      }
+    },
+    {
+      "id": "emp-top-1",
+      "dataset": "employees",
+      "question": "Who are the 5 highest-paid employees?",
+      "category": "get_top_records",
+      "expected_value": "E0041",
+      "value_description": "highest-paid employee id",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows",
+          "get_top_records"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "The five highest-paid employees are E0026 from Engineering with a salary of 950000.0, E0015 from Marketing earning 149645.31, E0084 from Marketing earning 148677.39, E0025 from Sales earning 148295.61, and E0082 from Support earning 148179.44. These figures come from the sorted salary list after excluding null values. The top salary of 950000.0 is markedly higher than the rest, which may indicate a statistical outlier. All other top salaries are within a relatively tight range of about 148k to 150k.",
+        "findings_total": 5,
+        "findings_verified": 5,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 75800,
+        "total_tokens": 19766,
+        "call_count": 7,
+        "groq_reported_ms": 6621
+      }
+    },
+    {
+      "id": "emp-bottom-1",
+      "dataset": "employees",
+      "question": "Who are the 5 lowest-paid employees?",
+      "category": "get_bottom_records",
+      "expected_value": "E0041",
+      "value_description": "lowest-paid employee id",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "get_bottom_records",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The bottom five records by salary include four employees (E0041, E0042, E0043, E0044) whose salary field is missing, so we cannot rank them by pay. Among the records with actual salary values, the lowest paid employee is E0027 with a salary of 40,404.16. The missing salary entries may indicate incomplete data entry and would need to be resolved before a definitive ranking can be made.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 41964,
+        "total_tokens": 6177,
+        "call_count": 3,
+        "groq_reported_ms": 1123
+      }
+    },
+    {
+      "id": "emp-multi-1",
+      "dataset": "employees",
+      "question": "Is the highest salary in this dataset a legitimate outlier or a data error?",
+      "category": "multi_step",
+      "expected_value": "E0041",
+      "value_description": "the employee behind the salary outlier",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_logical_violations",
+          "detect_outliers",
+          "get_column_statistics",
+          "get_dataset_profile"
+        ],
+        "value_correct": false,
+        "status": "ok",
+        "answer": "The top salary of 950,000 is identified as a statistical outlier by the IQR method, and no logical rule violations were found for the salary column. This suggests it may be a legitimate extreme value, but it should be double\u2011checked to rule out a data entry error.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 21013,
+        "total_tokens": 10352,
+        "call_count": 5,
+        "groq_reported_ms": 2819
+      }
+    },
+    {
+      "id": "emp-multi-2",
+      "dataset": "employees",
+      "question": "Give me a complete data quality summary for this dataset.",
+      "category": "multi_step",
+      "expected_value": 4,
+      "value_description": "missing salary count (one of several quality issues expected)",
+      "analyze": {
+        "tool_correct": true,
+        "tools_used": [
+          "detect_anomalies",
+          "get_dataset_profile"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The dataset contains 100 records across 8 columns. There are 4 missing salary entries (4% of rows) and no other missing values. Duplicate detection shows 3 completely duplicated rows (3% of the data), plus 2 duplicate employee IDs and 4 duplicate hire dates. Outlier analysis flags one unusually high salary and one performance_score above the IQR\u2011based upper bound, each representing about 1% of rows. No logical violations were found.",
+        "findings_total": 7,
+        "findings_verified": 7,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 6445,
+        "total_tokens": 7746,
+        "call_count": 3,
+        "groq_reported_ms": 4734
+      }
+    },
+    {
+      "id": "emp-sql-1",
+      "dataset": "employees",
+      "question": "What's the average salary per department, sorted from highest to lowest?",
+      "category": "nl_to_sql",
+      "expected_value": "Engineering",
+      "value_description": "top-paying department (via SQL)",
+      "analyze": {
+        "tool_correct": false,
+        "tools_used": [
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The average salary by department, from highest to lowest, is: Engineering (~131,983), Marketing (~108,590), Support (~105,411), Finance (~85,345), and Sales (~83,177). Engineering leads with the highest average pay, while Sales is at the bottom of the list.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3503,
+        "total_tokens": 3488,
+        "call_count": 2,
+        "groq_reported_ms": 1034
+      },
+      "nl_to_sql": {
+        "value_correct": true,
+        "answer": "The average salary is highest in Engineering at roughly\u202f$131,983, followed by Marketing at about\u202f$108,590. Support comes next with an average of\u202f$105,411, then Finance at\u202f$85,345, and Sales at the lowest average of\u202f$83,177.",
+        "generated_sql": "SELECT department, AVG(salary) AS avg_salary FROM dataset GROUP BY department ORDER BY avg_salary DESC LIMIT 10000",
+        "latency_ms": 7616,
+        "total_tokens": 890
+      }
+    },
+    {
+      "id": "emp-sql-2",
+      "dataset": "employees",
+      "question": "How many employees have more than 10 years of experience?",
+      "category": "nl_to_sql",
+      "expected_value": 20,
+      "value_description": "count of employees with 10+ years experience",
+      "analyze": {
+        "tool_correct": false,
+        "tools_used": [
+          "filter_rows"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "There are 20 employees who have more than 10 years of experience out of the 100 records in the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 1955,
+        "total_tokens": 4037,
+        "call_count": 2,
+        "groq_reported_ms": 1114
+      },
+      "nl_to_sql": {
+        "value_correct": false,
+        "answer": "According to the data, 64 employees have more than 10 years of experience. This figure represents the total number of employees who meet that experience threshold.",
+        "generated_sql": "SELECT COUNT(*) AS employee_count FROM dataset WHERE years_experience > 10 LIMIT 10000",
+        "latency_ms": 1151,
+        "total_tokens": 794
       }
     }
   ]

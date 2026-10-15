@@ -14,7 +14,7 @@ short — what changed and what's next, not a full diff.
 | 5 — Dashboards & Visualization      | ✅ Done         |
 | 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
 | 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 In progress — Steps 1, 2, 4, 5 done; Step 3 built, full run pending quota |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 Steps 1–5 done; 6 (Render deploy) and 7 (GIF) wait on the owner |
 
 ## Known issues
 
@@ -689,3 +689,22 @@ short — what changed and what's next, not a full diff.
   (not built; the plan marks it as polish), the Settings placeholder, the
   rest of the eval run (15/51 left), and the Render Blueprint (owner's
   login).
+
+## 2026-10-15 (Settings page — last placeholder removed)
+
+- `/workspace/settings` was the only route still rendering
+  `PlaceholderPage`. It's now a real, read-only `SettingsPage`: account
+  name/email/status from the session, plus a log-out action. No backend
+  endpoint exists for editing an account, so none was faked.
+  `placeholder-page.tsx` had no other users and was deleted.
+- Checks: frontend 26/26, tsc/oxlint clean.
+
+## 2026-10-15 (Phase 8 Step 3 done — eval run complete, 51/51)
+
+- Resumed with `--resume`: the 15 remaining questions all succeeded.
+  Final: 86.3% value accuracy (44/51), 100% tool selection, 10.2% of
+  findings flagged by the validator, 6,365 tokens and 11.3 s per question.
+  `/ask` vs `/analyze` (n=11): 81.8% vs 90.9% accuracy.
+- README, `docs/EVALS.md`, `docs/RESUME.md`, PHASES.md updated with these
+  numbers. Still open: Render deploy (owner's login), README GIF (human
+  recording), P2 dashboard polish (deliberately deferred).
