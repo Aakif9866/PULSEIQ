@@ -24,7 +24,7 @@ export function DashboardDetailPage() {
     return (
       <div className="flex flex-col">
         <PageHeader title="Dashboard not found" />
-        <div className="px-6 py-5">
+        <div className="px-4 py-5 sm:px-6">
           <EmptyState
             icon={LayoutDashboard}
             title="Dashboard not found"
@@ -47,7 +47,7 @@ export function DashboardDetailPage() {
         }
       />
 
-      <div className="px-6 py-5">
+      <div className="px-4 py-5 sm:px-6">
         {dashboard.charts.length === 0 ? (
           <EmptyState
             icon={Sparkles}

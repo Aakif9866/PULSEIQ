@@ -42,7 +42,7 @@ export function AskAnalystView() {
   }
 
   return (
-    <div className="flex flex-col gap-4 px-6 py-5">
+    <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
       {readyDatasets.length === 0 ? (
         <EmptyState
           icon={Database}
@@ -59,8 +59,10 @@ export function AskAnalystView() {
           <CardContent>
             <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
               <div className="space-y-1.5">
-                <Label>Dataset</Label>
-                <Select value={datasetId} onChange={(e) => setDatasetId(e.target.value)}>
+                <Label htmlFor="ask-dataset">Dataset</Label>
+                <Select
+                  id="ask-dataset"
+                  value={datasetId} onChange={(e) => setDatasetId(e.target.value)}>
                   <option value="">Select a dataset…</option>
                   {readyDatasets.map((d) => (
                     <option key={d.id} value={d.id}>
@@ -70,8 +72,9 @@ export function AskAnalystView() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Question</Label>
+                <Label htmlFor="ask-question">Question</Label>
                 <Input
+                  id="ask-question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="e.g. What's the total amount per region?"

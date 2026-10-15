@@ -186,14 +186,15 @@ export function AnalyzeAnalystView() {
       {
         onSuccess: (response) => {
           setLastResponse(response)
-          setHistory((prev) => [...prev, { question: asked, answer: response.answer }])
+          // The server caps each turn at 4,000 characters.
+          setHistory((prev) => [...prev, { question: asked, answer: response.answer.slice(0, 4000) }])
         },
       },
     )
   }
 
   return (
-    <div className="flex flex-col gap-4 px-6 py-5">
+    <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
       {readyDatasets.length === 0 ? (
         <EmptyState
           icon={Database}
@@ -210,8 +211,9 @@ export function AnalyzeAnalystView() {
           <CardContent>
             <form className="flex flex-col gap-3" onSubmit={handleSubmit}>
               <div className="space-y-1.5">
-                <Label>Dataset</Label>
+                <Label htmlFor="analyze-dataset">Dataset</Label>
                 <Select
+                  id="analyze-dataset"
                   value={datasetId}
                   onChange={(e) => {
                     setDatasetId(e.target.value)
@@ -228,8 +230,9 @@ export function AnalyzeAnalystView() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Question</Label>
+                <Label htmlFor="analyze-question">Question</Label>
                 <Input
+                  id="analyze-question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
                   placeholder="e.g. Are there any anomalies in this data?"
@@ -243,6 +246,13 @@ export function AnalyzeAnalystView() {
                 <Sparkles className="h-4 w-4" strokeWidth={1.75} />
                 {analyze.isPending ? 'Analyzing…' : 'Ask'}
               </Button>
+              <p className="text-xs text-[var(--color-fg-subtle)]">
+                Your question, column names, and small calculated results are sent to our AI
+                provider (Groq). AI answers can be wrong; check the evidence below.{' '}
+                <Link to="/privacy" className="underline">
+                  Privacy
+                </Link>
+              </p>
 
               {analyze.isError &&
                 (analyze.error instanceof ApiError && analyze.error.status === 429 ? (

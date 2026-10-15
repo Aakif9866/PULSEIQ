@@ -122,7 +122,7 @@ export function MonitorsPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         {creating && (
           <form
             className="flex flex-col gap-4 rounded-md border border-[var(--color-border)] p-4"
@@ -132,8 +132,9 @@ export function MonitorsPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Dataset</Label>
+                <Label htmlFor="monitor-dataset">Dataset</Label>
                 <Select
+                  id="monitor-dataset"
                   value={datasetId}
                   onChange={(e) => {
                     setDatasetId(e.target.value)
@@ -150,8 +151,9 @@ export function MonitorsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Monitor name</Label>
+                <Label htmlFor="monitor-monitor-name">Monitor name</Label>
                 <Input
+                  id="monitor-monitor-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Daily revenue"
@@ -161,8 +163,9 @@ export function MonitorsPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Time column</Label>
+                <Label htmlFor="monitor-time-column">Time column</Label>
                 <Select
+                  id="monitor-time-column"
                   value={timeColumn}
                   onChange={(e) => setTimeColumn(e.target.value)}
                   disabled={!datasetId}
@@ -176,8 +179,9 @@ export function MonitorsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Metric column</Label>
+                <Label htmlFor="monitor-metric-column">Metric column</Label>
                 <Select
+                  id="monitor-metric-column"
                   value={metricColumn}
                   onChange={(e) => setMetricColumn(e.target.value)}
                   disabled={!datasetId}
@@ -191,8 +195,9 @@ export function MonitorsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Aggregation</Label>
+                <Label htmlFor="monitor-aggregation">Aggregation</Label>
                 <Select
+                  id="monitor-aggregation"
                   value={aggregation}
                   onChange={(e) => setAggregation(e.target.value as AggregationOp)}
                 >
@@ -207,8 +212,9 @@ export function MonitorsPage() {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Baseline</Label>
+                <Label htmlFor="monitor-baseline">Baseline</Label>
                 <Select
+                  id="monitor-baseline"
                   value={baselineStrategy}
                   onChange={(e) => setBaselineStrategy(e.target.value as BaselineStrategy)}
                 >
@@ -219,8 +225,9 @@ export function MonitorsPage() {
               </div>
               {baselineStrategy === 'zscore' ? (
                 <div className="space-y-1.5">
-                  <Label>Sensitivity (z-score)</Label>
+                  <Label htmlFor="monitor-sensitivity-z-score">Sensitivity (z-score)</Label>
                   <Input
+                    id="monitor-sensitivity-z-score"
                     type="number"
                     step="0.1"
                     min="0.1"
@@ -230,8 +237,9 @@ export function MonitorsPage() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <Label>Threshold (%)</Label>
+                  <Label htmlFor="monitor-threshold">Threshold (%)</Label>
                   <Input
+                    id="monitor-threshold"
                     type="number"
                     step="1"
                     min="1"
@@ -241,8 +249,9 @@ export function MonitorsPage() {
                 </div>
               )}
               <div className="space-y-1.5">
-                <Label>Check frequency</Label>
+                <Label htmlFor="monitor-check-frequency">Check frequency</Label>
                 <Select
+                  id="monitor-check-frequency"
                   value={checkFrequency}
                   onChange={(e) => setCheckFrequency(e.target.value as CheckFrequency)}
                 >

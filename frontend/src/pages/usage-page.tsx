@@ -63,7 +63,7 @@ export function UsagePage() {
         title="Usage"
         description="Your AI Analysis usage today (UTC), measured from the model provider's own token counts."
       />
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         {isLoading && <p className="text-xs text-[var(--color-fg-muted)]">Loading usage…</p>}
         {error && (
           <p className="text-xs text-[var(--color-negative)]">

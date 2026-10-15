@@ -12,7 +12,7 @@ import { ApiError } from '@/lib/api-client'
 import { formatBytes, formatDate } from '@/lib/utils'
 import type { Dataset } from '@/types/dataset'
 import { Database, FileSpreadsheet, Trash2, Upload } from 'lucide-react'
-import { type ChangeEvent, useRef } from 'react'
+import { type ChangeEvent, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 const ACCEPTED_EXTENSIONS = '.csv,.xlsx,.xls'
@@ -22,14 +22,42 @@ export function DatasetsPage() {
   const { data: storageMode } = useStorageMode()
   const upload = useUploadDataset()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Remembers the dataset count it was raised at, so a delete or a new
+  // upload makes a stale message disappear without an effect.
+  const [limitError, setLimitErrorState] = useState<{ text: string; count: number } | null>(null)
+  const datasetCount = datasets?.length ?? 0
+  const setLimitError = (text: string | null) =>
+    setLimitErrorState(text === null ? null : { text, count: datasetCount })
+  const visibleLimitError = limitError?.count === datasetCount ? limitError.text : null
+  const maxMb = storageMode?.max_upload_size_mb
+  const maxDatasets = storageMode?.max_datasets_per_user
+  const atLimit = maxDatasets !== undefined && datasetCount >= maxDatasets
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = '' // allow re-selecting the same file after an error
-    if (file) upload.mutate(file)
+    if (!file) return
+    // Early, friendly check; the server enforces the same limit.
+    if (maxMb !== undefined && file.size > maxMb * 1024 * 1024) {
+      setLimitError(`Upload limit: each file can be at most ${maxMb} MB.`)
+      return
+    }
+    setLimitError(null)
+    upload.mutate(file)
   }
 
-  const triggerFilePicker = () => fileInputRef.current?.click()
+  // Same wording as the server's own 409/413, which still enforces both.
+  const triggerFilePicker = () => {
+    upload.reset()
+    if (atLimit) {
+      setLimitError(
+        `Upload limit: you can keep up to ${maxDatasets} datasets. Delete one to upload another.`,
+      )
+      return
+    }
+    setLimitError(null)
+    fileInputRef.current?.click()
+  }
 
   return (
     <div className="flex flex-col">
@@ -53,7 +81,13 @@ export function DatasetsPage() {
         }
       />
 
-      <div className="px-6 py-5">
+      <div className="px-4 py-5 sm:px-6">
+        {visibleLimitError && (
+          <p role="alert" className="mb-3 text-xs text-[var(--color-negative)]">
+            {visibleLimitError}
+          </p>
+        )}
+
         {storageMode?.storage_provider === 'local' && (
           <p className="mb-3 text-xs text-[var(--color-fg-subtle)]">
             Datasets are stored on the server's local disk in this environment — they may not
@@ -63,7 +97,7 @@ export function DatasetsPage() {
         )}
 
         {upload.isError && (
-          <p className="mb-3 text-xs text-[var(--color-negative)]">
+          <p role="alert" className="mb-3 text-xs text-[var(--color-negative)]">
             {upload.error instanceof ApiError ? upload.error.message : 'Upload failed. Please try again.'}
           </p>
         )}

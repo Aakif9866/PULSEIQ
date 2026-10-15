@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /workspace
+
+Sitemap: https://pulseiq-aakif.onrender.com/sitemap.xml

@@ -84,6 +84,17 @@ export function SignupPage() {
             <Button type="submit" className="w-full" disabled={signup.isPending}>
               {signup.isPending ? 'Creating account…' : 'Create account'}
             </Button>
+            <p className="text-center text-xs text-[var(--color-fg-subtle)]">
+              By signing up you agree to the{' '}
+              <Link to="/terms" className="underline">
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link to="/privacy" className="underline">
+                Privacy Policy
+              </Link>
+              .
+            </p>
           </form>
         </div>
 

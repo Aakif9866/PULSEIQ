@@ -1,7 +1,10 @@
 import { Button } from '@/components/ui/button'
+import { ContactButton } from '@/components/landing/contact-button'
+import { SiteFooter } from '@/components/landing/site-footer'
 import { HeroPanel } from '@/components/landing/hero-panel'
+import { usePublicStats } from '@/features/datasets/api'
 import { motion } from 'framer-motion'
-import { Activity, Database, MessageSquareText, ShieldCheck } from 'lucide-react'
+import { Activity, Database, MessageSquareText, ShieldCheck, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const FEATURES = [
@@ -26,16 +29,25 @@ const FEATURES = [
 ]
 
 export function LandingPage() {
+  const { data: stats } = usePublicStats()
+
   return (
     <div className="min-h-screen bg-[var(--color-canvas)] text-[var(--color-fg)]">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <div className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-[var(--color-accent)]">
             <Activity className="h-4 w-4 text-[var(--color-accent-fg)]" strokeWidth={2.5} />
           </div>
           <span className="text-base font-semibold tracking-tight">PulseIQ</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {stats && (
+            <span className="mr-2 hidden items-center gap-1.5 text-xs text-[var(--color-fg-muted)] sm:flex">
+              <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {stats.total_users.toLocaleString()} {stats.total_users === 1 ? 'user' : 'users'} signed up
+            </span>
+          )}
+          <ContactButton />
           <Button variant="ghost" size="sm" asChild>
             <Link to="/login">Log in</Link>
           </Button>
@@ -45,7 +57,8 @@ export function LandingPage() {
         </div>
       </header>
 
-      <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-6 py-20 lg:grid-cols-2">
+      <main>
+      <section className="relative mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-2">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[420px] grid-backdrop" />
 
         <motion.div
@@ -67,7 +80,7 @@ export function LandingPage() {
             plain language — with every AI-generated query validated against your schema before it
             runs. No spreadsheets. No guessing.
           </p>
-          <div className="mt-8 flex items-center gap-3">
+          <div className="mt-8 flex flex-wrap items-center gap-3">
             <Button size="lg" asChild>
               <Link to="/signup">Start analyzing</Link>
             </Button>
@@ -87,7 +100,7 @@ export function LandingPage() {
         </motion.div>
       </section>
 
-      <section className="mx-auto max-w-6xl border-t border-[var(--color-border)] px-6 py-16">
+      <section className="mx-auto max-w-6xl border-t border-[var(--color-border)] px-4 py-16 sm:px-6">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, description }) => (
             <div key={title}>
@@ -103,11 +116,9 @@ export function LandingPage() {
         </div>
       </section>
 
-      <footer className="border-t border-[var(--color-border)] px-6 py-8">
-        <p className="mx-auto max-w-6xl text-xs text-[var(--color-fg-subtle)]">
-          PulseIQ — a self-service analytics workspace.
-        </p>
-      </footer>
+      </main>
+
+      <SiteFooter />
     </div>
   )
 }

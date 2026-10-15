@@ -36,7 +36,7 @@ export function WorkspaceHomePage() {
         }
       />
 
-      <div className="grid grid-cols-3 gap-3 px-6 py-5">
+      <div className="grid grid-cols-3 gap-3 px-4 py-5 sm:px-6">
         {statTiles.map(({ label, value, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="flex items-center justify-between py-4">

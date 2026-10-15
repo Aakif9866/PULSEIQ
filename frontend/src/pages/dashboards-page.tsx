@@ -43,7 +43,7 @@ export function DashboardsPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         {creating && (
           <form
             className="flex items-end gap-2 rounded-md border border-[var(--color-border)] p-3"

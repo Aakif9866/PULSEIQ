@@ -42,7 +42,40 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   auth?: boolean
 }
 
-async function request<T>(path: string, { body, auth = true, headers, ...init }: RequestOptions = {}): Promise<T> {
+// One refresh at a time: concurrent 401s all wait on the same attempt,
+// because each refresh rotates (and so invalidates) the refresh token.
+let refreshing: Promise<boolean> | null = null
+
+function refreshSession(): Promise<boolean> {
+  refreshing ??= (async () => {
+    const { refreshToken, user, setSession, clearSession } = useAuthStore.getState()
+    if (!refreshToken || !user) return false
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', [REQUEST_ID_HEADER]: newRequestId() },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      if (!response.ok) {
+        clearSession()
+        return false
+      }
+      setSession({ user, tokens: await response.json() })
+      return true
+    } catch {
+      return false // network error: keep the session, the next call retries
+    } finally {
+      refreshing = null
+    }
+  })()
+  return refreshing
+}
+
+async function request<T>(
+  path: string,
+  { body, auth = true, headers, ...init }: RequestOptions = {},
+  retried = false,
+): Promise<T> {
   const token = auth ? useAuthStore.getState().accessToken : null
   // FormData bodies (file uploads) must keep the browser-generated
   // multipart Content-Type (with boundary) — never JSON-encode or override it.
@@ -61,6 +94,9 @@ async function request<T>(path: string, { body, auth = true, headers, ...init }:
   })
 
   if (response.status === 401 && auth) {
+    if (!retried && (await refreshSession())) {
+      return request<T>(path, { body, auth, headers, ...init }, true)
+    }
     useAuthStore.getState().clearSession()
   }
 

@@ -38,7 +38,7 @@ export function MonitorDetailPage() {
     return (
       <div className="flex flex-col">
         <PageHeader title="Monitor not found" />
-        <div className="px-6 py-5">
+        <div className="px-4 py-5 sm:px-6">
           <EmptyState
             icon={History}
             title="Monitor not found"
@@ -73,7 +73,7 @@ export function MonitorDetailPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         <Card>
           <CardHeader>
             <CardTitle>Configuration</CardTitle>

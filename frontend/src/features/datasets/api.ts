@@ -50,7 +50,12 @@ export function useStorageMode() {
   return useQuery({
     queryKey: ['storage-mode'],
     queryFn: () =>
-      apiClient.get<{ status: string; storage_provider: 'local' | 'r2' }>('/health', {
+      apiClient.get<{
+        status: string
+        storage_provider: 'local' | 'r2'
+        max_upload_size_mb: number
+        max_datasets_per_user: number
+      }>('/health', {
         auth: false,
       }),
     staleTime: Infinity,
@@ -71,5 +76,12 @@ export function useDatasetQueryResult(datasetId: string, request: DatasetQueryRe
     queryKey: [...datasetKey(datasetId), 'query', request],
     queryFn: () => apiClient.post<DatasetQueryResult>(`/datasets/${datasetId}/query`, request),
     enabled: Boolean(datasetId),
+  })
+}
+
+export function usePublicStats() {
+  return useQuery({
+    queryKey: ['public-stats'],
+    queryFn: () => apiClient.get<{ total_users: number }>('/stats', { auth: false }),
   })
 }

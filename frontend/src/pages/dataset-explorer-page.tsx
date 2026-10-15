@@ -83,7 +83,7 @@ export function DatasetExplorerPage() {
     return (
       <div className="flex flex-col">
         <PageHeader title="Dataset not found" />
-        <div className="px-6 py-5">
+        <div className="px-4 py-5 sm:px-6">
           <EmptyState
             icon={AlertTriangle}
             title="Dataset not found"
@@ -113,7 +113,7 @@ export function DatasetExplorerPage() {
         }
       />
 
-      <div className="flex flex-col gap-4 px-6 py-5">
+      <div className="flex flex-col gap-4 px-4 py-5 sm:px-6">
         {dataset.status === 'profiling_failed' && (
           <EmptyState
             icon={AlertTriangle}
@@ -208,8 +208,12 @@ export function DatasetExplorerPage() {
                 {mode === 'summary' && (
                   <div className="grid grid-cols-3 gap-3">
                     <div className="space-y-1.5">
-                      <Label>Group by</Label>
-                      <Select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+                      <Label htmlFor="explore-group-by">Group by</Label>
+                      <Select
+                        id="explore-group-by"
+                        value={groupBy}
+                        onChange={(e) => setGroupBy(e.target.value)}
+                      >
                         <option value="">(none)</option>
                         {columnNames.map((name) => (
                           <option key={name} value={name}>
@@ -219,8 +223,9 @@ export function DatasetExplorerPage() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Aggregate</Label>
+                      <Label htmlFor="explore-aggregate">Aggregate</Label>
                       <Select
+                        id="explore-aggregate"
                         value={aggOp}
                         onChange={(e) => setAggOp(e.target.value as AggregationOp)}
                       >
@@ -232,8 +237,9 @@ export function DatasetExplorerPage() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Of column</Label>
+                      <Label htmlFor="explore-of-column">Of column</Label>
                       <Select
+                        id="explore-of-column"
                         value={aggColumn}
                         onChange={(e) => setAggColumn(e.target.value)}
                         disabled={aggOp === 'count'}
@@ -251,8 +257,10 @@ export function DatasetExplorerPage() {
 
                 <div className="grid grid-cols-4 gap-3">
                   <div className="space-y-1.5">
-                    <Label>Filter column</Label>
-                    <Select value={filterColumn} onChange={(e) => setFilterColumn(e.target.value)}>
+                    <Label htmlFor="explore-filter-column">Filter column</Label>
+                    <Select
+                      id="explore-filter-column"
+                      value={filterColumn} onChange={(e) => setFilterColumn(e.target.value)}>
                       <option value="">(none)</option>
                       {columnNames.map((name) => (
                         <option key={name} value={name}>
@@ -262,8 +270,10 @@ export function DatasetExplorerPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Is</Label>
-                    <Select value={filterOp} onChange={(e) => setFilterOp(e.target.value as FilterOp)}>
+                    <Label htmlFor="explore-is">Is</Label>
+                    <Select
+                      id="explore-is"
+                      value={filterOp} onChange={(e) => setFilterOp(e.target.value as FilterOp)}>
                       {FILTER_OPS.map((op) => (
                         <option key={op} value={op}>
                           {op}
@@ -272,12 +282,16 @@ export function DatasetExplorerPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Value</Label>
-                    <Input value={filterValue} onChange={(e) => setFilterValue(e.target.value)} />
+                    <Label htmlFor="explore-value">Value</Label>
+                    <Input
+                      id="explore-value"
+                      value={filterValue} onChange={(e) => setFilterValue(e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Sort by</Label>
-                    <Select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                    <Label htmlFor="explore-sort-by">Sort by</Label>
+                    <Select
+                      id="explore-sort-by"
+                      value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                       <option value="">(none)</option>
                       {columnNames.map((name) => (
                         <option key={name} value={name}>

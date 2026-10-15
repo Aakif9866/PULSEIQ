@@ -64,3 +64,58 @@ describe('request ids', () => {
     expect(newRequestId()).toMatch(UUID_V4)
   })
 })
+
+describe('silent token refresh', () => {
+  const user = { id: 'u1', email: 'a@b.c', full_name: null, is_active: true }
+
+  it('refreshes once on a 401 and retries with the new token', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store')
+    useAuthStore.getState().setSession({
+      user,
+      tokens: { access_token: 'old', refresh_token: 'r1', token_type: 'bearer' },
+    })
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return jsonResponse(200, { access_token: 'new', refresh_token: 'r2', token_type: 'bearer' })
+      }
+      const auth = (init.headers as Record<string, string>).Authorization
+      return auth === 'Bearer new' ? jsonResponse(200, { ok: true }) : jsonResponse(401, {})
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(apiClient.get('/me')).resolves.toEqual({ ok: true })
+    expect(useAuthStore.getState().refreshToken).toBe('r2')
+  })
+
+  it('shares one refresh across concurrent 401s (each refresh rotates the token)', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store')
+    useAuthStore.getState().setSession({
+      user,
+      tokens: { access_token: 'old', refresh_token: 'r1', token_type: 'bearer' },
+    })
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        return jsonResponse(200, { access_token: 'new', refresh_token: 'r2', token_type: 'bearer' })
+      }
+      const auth = (init.headers as Record<string, string>).Authorization
+      return auth === 'Bearer new' ? jsonResponse(200, { ok: true }) : jsonResponse(401, {})
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await Promise.all([apiClient.get('/a'), apiClient.get('/b'), apiClient.get('/c')])
+    const refreshCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/auth/refresh'))
+    expect(refreshCalls).toHaveLength(1)
+  })
+
+  it('signs out when the refresh itself is rejected', async () => {
+    const { useAuthStore } = await import('@/stores/auth-store')
+    useAuthStore.getState().setSession({
+      user,
+      tokens: { access_token: 'old', refresh_token: 'revoked', token_type: 'bearer' },
+    })
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => jsonResponse(401, {})))
+
+    await expect(apiClient.get('/me')).rejects.toBeInstanceOf(ApiError)
+    expect(useAuthStore.getState().accessToken).toBeNull()
+  })
+})
