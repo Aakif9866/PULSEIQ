@@ -10,11 +10,10 @@ import { LandingPage } from '@/pages/landing-page'
 import { LoginPage } from '@/pages/login-page'
 import { MonitorDetailPage } from '@/pages/monitor-detail-page'
 import { MonitorsPage } from '@/pages/monitors-page'
-import { PlaceholderPage } from '@/pages/placeholder-page'
+import { SettingsPage } from '@/pages/settings-page'
 import { SignupPage } from '@/pages/signup-page'
 import { UsagePage } from '@/pages/usage-page'
 import { WorkspaceHomePage } from '@/pages/workspace-home-page'
-import { Settings } from 'lucide-react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 export default function App() {
@@ -36,18 +35,7 @@ export default function App() {
           <Route path="/workspace/monitors" element={<MonitorsPage />} />
           <Route path="/workspace/monitors/:monitorId" element={<MonitorDetailPage />} />
           <Route path="/workspace/usage" element={<UsagePage />} />
-          <Route
-            path="/workspace/settings"
-            element={
-              <PlaceholderPage
-                title="Settings"
-                description="Account and workspace preferences."
-                icon={Settings}
-                emptyTitle="Nothing to configure yet"
-                emptyDescription="Account and workspace settings will land here in a later phase."
-              />
-            }
-          />
+          <Route path="/workspace/settings" element={<SettingsPage />} />
         </Route>
       </Route>
 
