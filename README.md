@@ -15,6 +15,8 @@ dataset."*
 > the page says so and when it resets. It's rebuilt automatically on every
 > deploy.
 
+![PulseIQ demo: log in, a profiled dataset with its quality score, plain English to SQL, and an AI analysis with verified findings](docs/demo.gif)
+
 ## What it does
 
 - **AI Analyst** — ask a question; the model decides which of 16 analytical

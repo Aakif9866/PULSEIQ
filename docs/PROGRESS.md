@@ -12,9 +12,9 @@ short — what changed and what's next, not a full diff.
 | 3 — Analytics Engine                | ✅ Done         |
 | 4 — AI Analyst (Groq)               | ✅ Done         |
 | 5 — Dashboards & Visualization      | ✅ Done         |
-| 6 — Hardening & Deployment          | 🟡 Partial (see Deferred in PHASES.md) |
-| 7 — V2: Hybrid AI Analyst, History & Data Quality | 🟡 Backend done (feature branch); not frontend-wired |
-| 8 — V2 Completion & Portfolio Readiness | 🟡 Steps 1–5 done; 6 (Render deploy) and 7 (GIF) wait on the owner |
+| 6 — Hardening & Deployment          | 🟡 Done except the live deploy (Render) |
+| 7 — V2: Hybrid AI Analyst, History & Data Quality | ✅ Done, frontend-wired |
+| 8 — V2 Completion & Portfolio Readiness | 🟡 Steps 1–5 and 7 done; Step 6 waits on the Render deploy |
 
 ## Known issues
 
@@ -708,3 +708,16 @@ short — what changed and what's next, not a full diff.
 - README, `docs/EVALS.md`, `docs/RESUME.md`, PHASES.md updated with these
   numbers. Still open: Render deploy (owner's login), README GIF (human
   recording), P2 dashboard polish (deliberately deferred).
+
+## 2026-10-15 (Phase 6 workers closed, Phase 8 Step 7 done)
+
+- **README GIF:** `docs/demo.gif` (24 frames, 324 KB) recorded from the
+  real app — local backend on a throwaway `pulseiq_demo` database (not
+  Neon), demo seeder, live Groq — with Playwright driving the installed
+  Chrome. Shows login, the dataset's quality score, plain English → SQL,
+  and an `/analyze` answer with 2/2 verified findings.
+- **Background workers: decided against, measured.** Profiling a 25.9 MB
+  CSV (375,240 rows) takes 0.26 s; `/analyze`'s time is model-API wait a
+  queue wouldn't cut; Render free has no worker type. Details in PHASES.md.
+- Phase 7 marked done (its frontend gap closed by Step 1 and the SQL
+  Explorer). Only the live Render deploy remains in Phases 6 and 8.

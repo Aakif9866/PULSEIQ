@@ -128,11 +128,17 @@ dataset and get back a grounded answer, which they can save.
 **Exit criteria:** a user can save an analysis as a chart and assemble
 multiple charts into a dashboard they can revisit.
 
-## Phase 6 — Hardening & Deployment (partial — see Deferred)
+## Phase 6 — Hardening & Deployment (done except the live deploy)
 
-- [ ] Background workers for long-running ingest/query jobs (`app/workers`,
-      still empty) — **deferred by choice**: profiling/AI-ask stay
-      synchronous until they're an actual bottleneck; see Deferred below.
+- [x] Background workers — **decided against, with a measurement**
+      (2026-10-15). Upload profiling of a 25.9 MB CSV (375,240 rows, just
+      over the production `MAX_UPLOAD_SIZE_MB=25`) takes 0.26 s (read
+      0.17 s + profile 0.09 s, 393 MB peak RSS) — no user-visible wait to
+      move off the request. `/analyze` averages 11.3 s (`docs/EVALS.md`),
+      but that time is waiting on the model API, which a queue wouldn't
+      shorten, and Render's free tier has no worker service type. Revisit
+      if uploads beyond 25 MB are allowed or analyses need to outlive a
+      request.
 - [x] CI pipeline (`.github/workflows/ci.yml`): a `backend` job (ruff,
       mypy, `alembic upgrade head` + pytest against a real Postgres
       service container) and a `frontend` job (oxlint, tsc, `npm run
@@ -154,8 +160,9 @@ multiple charts into a dashboard they can revisit.
       External error tracking (Sentry or similar) intentionally not
       added — it needs a real account/DSN to be worth wiring up, so it
       waits alongside deployment.
-- [ ] Deployment (target environment TBD) — **deferred by choice**: no
-      target chosen yet; see Deferred below.
+- [~] Deployment — target is Render (`render.yaml`, `docs/DEPLOYMENT.md`).
+      Verified locally under the free tier's limits; the live services
+      are currently suspended in the owner's Render account.
 
 **Exit criteria:** the app can be deployed and operated outside a local
 Docker Compose setup with confidence. Not fully met — deployment itself
@@ -215,7 +222,8 @@ detail: [V2_ROADMAP.md](V2_ROADMAP.md), [AI_ANALYTICS.md](AI_ANALYTICS.md).
 - [x] `GET /history` 500 bug fixed — logging an `/analyze` call used a
       `source` value (`"ai_deep_analysis"`) the read schema's `Literal`
       didn't list yet; regression-tested.
-- [ ] **Not yet done: none of this is wired into the frontend.** The "AI
+- [x] **Wired into the frontend** (Phase 8 Step 1 and the 2026-10-15 SQL
+      Explorer). Original note: The "AI
       Analysis" page still calls the old, unvalidated `/ask` endpoint
       (`AnalystService.ask()` — one LLM call picks a query, one LLM call
       free-writes prose over the raw rows, no tool calls, no validation).
@@ -367,10 +375,12 @@ alternatives, 3 interview questions to be ready for).
       every step documented in `docs/DEPLOYMENT.md` marked verified vs.
       not; a demo account + sample dataset so a recruiter can try it in
       under a minute.
-- [~] **Step 7 — Portfolio packaging** *(README and docs/RESUME.md written, every claim
+- [x] **Step 7 — Portfolio packaging** *(README and docs/RESUME.md written, every claim
       checked against the code and every number sourced — see RESUME.md's source table.
-      One item outstanding: the short GIF needs a human screen recording (no browser or
-      recording tool in this environment). The eval table now holds the complete 51-question run)*. Original scope: Rewrite `README.md` — one-line
+      `docs/demo.gif` recorded 2026-10-15 from the real app (local stack, demo seed, live
+      Groq) with headless Chrome via Playwright: login, dataset quality score, plain English
+      to SQL, and an `/analyze` answer with verified findings. The eval table holds the
+      complete 51-question run)*. Original scope: Rewrite `README.md` — one-line
       pitch, live demo link, short GIF, Mermaid architecture diagram, eval
       results table, "key engineering decisions" (deterministic tools +
       validator over free-form answers, how NL-to-SQL stays safe, how rate
