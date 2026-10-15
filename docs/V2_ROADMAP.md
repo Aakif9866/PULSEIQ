@@ -148,7 +148,7 @@ riskier primitive.
 
 Verified against the actual codebase, not assumed:
 
-- **Auth**: signup/login, JWT access (24h) + refresh (14d) tokens, bcrypt
+- **Auth**: signup/login, JWT access (15 min) + rotating refresh (14d) tokens, bcrypt
   password hashing.
 - **Dataset upload**: `.csv`, `.xlsx`, `.xls` accepted (only `.csv`/`.xlsx`
   actually parse — see limitations); size-limited via `MAX_UPLOAD_SIZE_MB`.

@@ -116,9 +116,8 @@ hardcoded 8000), health check returned 200, logs switched to JSON
    8000 remains the default when nothing sets it (local Docker/compose —
    verified unchanged).
 
-`backend/railway.json` is a config-as-code file that tells Railway to
-build from `Dockerfile` and health-check `/api/v1/health` — it saves a few
-manual dashboard fields but doesn't replace the steps below.
+`backend/railway.json` (Railway config-as-code) was removed on
+2026-10-15 when hosting moved to Render; this section is history.
 
 ### Setup steps (dashboard/CLI — do this part yourself)
 

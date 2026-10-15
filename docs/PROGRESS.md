@@ -721,3 +721,45 @@ short — what changed and what's next, not a full diff.
   queue wouldn't cut; Render free has no worker type. Details in PHASES.md.
 - Phase 7 marked done (its frontend gap closed by Step 1 and the SQL
   Explorer). Only the live Render deploy remains in Phases 6 and 8.
+
+## 2026-10-15 (upload limits, sign-up count, contact button)
+
+- **Per-user limits:** at most `MAX_DATASETS_PER_USER=5` datasets
+  (409 on the sixth, checked before anything is stored) and
+  `MAX_UPLOAD_SIZE_MB=50` per file by default (was 200). `/health` now
+  exposes both, so the warnings next to Upload show the server's real
+  values; the page also blocks an oversized file client-side and
+  disables Upload at the limit.
+- **Render keeps 25 MB**, by the owner's choice after a measurement: a
+  50 MB CSV (750,480 rows) peaked at ~611 MB RSS (app 156 MB + parse and
+  profile ~455 MB), over the free instance's 512 MB.
+- **Public `GET /stats`** (`{"total_users": n}`, aggregate only) feeds a
+  "N users signed up" line in the landing header.
+- **Contact me** button in the landing header and footer: a small box
+  with the email and a Copy button, no mailto.
+- Checks: backend 320/320, frontend 26/26, ruff/mypy/tsc/oxlint clean.
+
+## 2026-10-15 (release audit — every finding fixed)
+
+- Full pre-release audit (security, privacy, UX, SEO, DevOps, AI) and fixes
+  for every finding; the table is in `docs/SECURITY.md` "Release audit
+  fixes". Highlights: all AI calls metered plus an app-wide token cap;
+  rate limits; chunked, pre-checked uploads; security headers and CSP;
+  15-minute access tokens with rotating, revocable refresh tokens
+  (migration `0010`); PyJWT/bcrypt replacing python-jose/passlib;
+  FastAPI/Starlette upgraded; multi-stage non-root Docker image.
+- **Privacy:** `/privacy` and `/terms` pages, footer links, sign-up
+  consent line, AI-processing note on the AI page, Settings → Export my
+  data and Delete account (password-confirmed, files removed from storage).
+- **UX/SEO:** phone layout (menu drawer), real 404, per-page titles and
+  canonicals, meta/Open Graph/Twitter tags, social image, robots.txt,
+  sitemap, labelled form fields, lazy-loaded routes (first-load JS 536 →
+  126 KB gzipped).
+- **Upload limits:** no upfront warning any more; a 6th dataset or an
+  oversized file shows an error only when attempted. The shared demo
+  account drops its oldest upload (never the sample) instead of locking.
+- `RENDER_DEPLOYMENT.md` at the repo root documents the Blueprint deploy.
+- Checks: backend 336/336, frontend 29/29, ruff/mypy/tsc/oxlint clean,
+  `npm audit` 0. Phone layouts verified in a real browser (no overflow, no
+  console errors). The new Docker image wasn't built locally (Docker
+  Desktop not running); CI's docker job builds it.

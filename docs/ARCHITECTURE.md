@@ -105,12 +105,12 @@ neither imports FastAPI or knows it's being called from an HTTP request.
 
 ## Authentication
 
-JWT (HS256, `python-jose`), issued as an access/refresh pair on
-signup/login. Passwords hashed with bcrypt (`passlib`). `get_current_user`
-(a FastAPI dependency, `app/api/deps.py`) decodes and validates the bearer
-token on every protected route; there is no session state on the server —
-a token is valid until it expires or the app restarts with a different
-`SECRET_KEY`. See `SECURITY.md` for the full model and its limitations.
+JWT (HS256, PyJWT), issued as a 15-minute access token plus a 14-day
+refresh token on signup/login. Passwords hashed with bcrypt. `get_current_user`
+(a FastAPI dependency, `app/api/deps.py`) validates the bearer token on every
+protected route. Refresh tokens are tracked server-side (`refresh_tokens`
+table): each refresh rotates them, logout revokes them, and reusing a revoked
+one revokes all of that user's sessions. See `SECURITY.md`.
 
 ## Dataset upload flow
 

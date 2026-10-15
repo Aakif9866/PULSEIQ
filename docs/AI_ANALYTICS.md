@@ -236,10 +236,10 @@ adding anything. Findings, in both directions:
   this project asks about before adding.
 
 **Known gaps, not hidden:**
-- `/ask` (deprecated) and `/ask-sql` call the Groq client directly
-  rather than through `AIProvider`, so they don't report their own token
-  usage. They *are* blocked once a user is over quota, so the limit can't
-  be bypassed by switching endpoints — their spend just isn't counted.
+- ~~`/ask` and `/ask-sql` don't count their tokens~~ — fixed 2026-10-15:
+  they (and monitor explanations) are metered through
+  `app/ai/groq_client.count_tokens()`, and an app-wide daily cap
+  (`AI_DAILY_TOKEN_QUOTA_GLOBAL`) sits on top of the per-user one.
 - No model tiering. The plan suggested a small model for routing and a
   larger one where needed. `/analyze` makes one routing-style decision
   per loop iteration inside the same conversation; splitting that across

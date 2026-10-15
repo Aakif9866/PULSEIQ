@@ -6,8 +6,10 @@ audit** — it's an honest account of what exists today.
 
 ## Authentication
 
-JWT (HS256), issued as an access token (24h) and refresh token (14d) on
-signup/login. Passwords hashed with bcrypt via `passlib`. `SECRET_KEY`
+JWT (HS256, PyJWT), issued as an access token (15 min) and refresh token
+(14d) on signup/login; refresh tokens rotate and are revocable server-side
+(see "Release audit fixes" below). Passwords hashed with bcrypt, capped at
+bcrypt's 72-byte limit. `SECRET_KEY`
 signs every token; `app/core/config.py` has a hard startup guard —
 `Settings` **refuses to even construct** if `ENVIRONMENT=production` and
 `SECRET_KEY` is still the insecure placeholder, or if `DEBUG=true` in that
@@ -225,3 +227,34 @@ origin.
 - **Cloudflare R2 storage is unverified against a real bucket** (see
   `docs/STORAGE.md`) — the misconfiguration failure path is verified, a
   real credential round trip is not.
+
+
+## Release audit fixes (2026-10-15)
+
+A full pre-release audit found these; each is fixed and covered by
+`backend/tests/test_security.py` unless noted.
+
+| Area | Before | Now |
+|---|---|---|
+| AI cost | `/ask`, `/ask-sql` tokens uncounted; free sign-ups could drain Groq's shared 200k/day | Every model call metered; per-user cap plus app-wide `AI_DAILY_TOKEN_QUOTA_GLOBAL` |
+| Brute force / spam | No rate limits | Per-IP limits on login (and per-email), signup, refresh, AI, SQL, uploads, export, deletion (`app/core/rate_limit.py`); real client IP from the proxy-appended `X-Forwarded-For` entry, so it can't be spoofed |
+| Upload DoS | Whole file read into memory before the size check | `Content-Length` rejected up front (413), then a chunked read capped at the limit; dataset-count check runs before reading |
+| Headers | None | API: nosniff, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, CSP, HSTS in production. Frontend: CSP, HSTS and the same set via `render.yaml` and nginx |
+| Sessions | 24h access tokens, refresh tokens unrevocable, logout client-only | 15-min access tokens with silent refresh; rotating, revocable refresh tokens; reuse revokes every session |
+| Enumeration | Faster failed login for unknown emails | Dummy bcrypt check equalizes timing; identical error body |
+| Passwords | Silent bcrypt 72-byte truncation; no login length cap | Signup rejects >72 bytes; login capped at 128 chars |
+| Libraries | python-jose 3.3.0, passlib 1.7.4 (unmaintained); Starlette 0.41.3 (CVE-2025-54121) | PyJWT, bcrypt directly; FastAPI 0.116.1 / Starlette 0.47.3; `npm audit`: 0 |
+| Prompt injection | No rule | `app/ai/guardrails.py` appended to every system prompt (tools stay read-only and owner-scoped either way) |
+| AI input size | Conversation turns unbounded | 2,000 / 4,000-char caps per turn |
+| Logs | Email on failed login; full question on tool-loop cap | User id / question length only |
+| Container | Root user, compilers in the runtime image | Multi-stage build, non-root `app` user |
+| Privacy | No policy, terms, export, or deletion | `/privacy`, `/terms`, Settings → Export my data / Delete account (password-confirmed; files deleted from storage) |
+
+**Deliberately unchanged, with the reason:** tokens stay in localStorage
+rather than httpOnly cookies. Frontend and API are on different
+`*.onrender.com` subdomains, and `onrender.com` is on the Public Suffix
+List, so the two are cross-site: a cookie would need `SameSite=None`, and
+browsers that block third-party cookies (Safari, Firefox strict) would log
+users out. The mitigation is a strict CSP (no inline or third-party
+scripts) and 15-minute access tokens. Moving both to one custom domain
+would allow first-party cookies.
