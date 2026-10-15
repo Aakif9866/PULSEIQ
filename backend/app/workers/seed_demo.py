@@ -36,6 +36,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.logging import configure_logging, get_logger
 from app.core.security import hash_password, verify_password
+from app.demo import DEMO_FILENAME
 from app.models.dashboard import Dashboard
 from app.models.dataset import Dataset
 from app.models.user import User
@@ -48,7 +49,6 @@ from app.storage import StorageProvider, get_storage_provider
 
 logger = get_logger(__name__)
 
-DEMO_FILENAME = "pulseiq_demo_sales.csv"
 DEMO_DASHBOARD_NAME = "Demo — Sales overview"
 _DEMO_CSV = Path(__file__).parent / "demo_data" / DEMO_FILENAME
 _REVENUE_BY_CATEGORY = DatasetQueryRequest(

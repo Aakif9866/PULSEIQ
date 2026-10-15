@@ -61,3 +61,13 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _no_rate_limits(monkeypatch):
+    """Off by default (tests sign up and log in many times from one client);
+    tests/test_security.py turns it back on to test it."""
+    from app.core import rate_limit
+
+    monkeypatch.setattr(settings, "RATE_LIMIT_ENABLED", False)
+    rate_limit.reset()

@@ -15,6 +15,7 @@ from app.core.exceptions import (
     InvalidQueryError,
     QueryTimeoutError,
 )
+from app.core.rate_limit import rate_limit
 from app.models.user import User
 from app.schemas.ai import AskRequest, AskResponse, AskSqlResponse
 from app.schemas.analysis import AnalyzeRequest, AnalyzeResponse
@@ -32,7 +33,11 @@ def _quota_exceeded(exc: AiQuotaExceededError) -> HTTPException:
     return HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=str(exc))
 
 
-@router.post("/{dataset_id}/ask", response_model=AskResponse)
+@router.post(
+    "/{dataset_id}/ask",
+    response_model=AskResponse,
+    dependencies=[Depends(rate_limit("ai", 20, 60))],
+)
 def ask_dataset(
     dataset_id: uuid.UUID,
     payload: AskRequest,
@@ -75,7 +80,11 @@ def ask_dataset(
         ) from exc
 
 
-@router.post("/{dataset_id}/analyze", response_model=AnalyzeResponse)
+@router.post(
+    "/{dataset_id}/analyze",
+    response_model=AnalyzeResponse,
+    dependencies=[Depends(rate_limit("ai", 20, 60))],
+)
 def analyze_dataset(
     dataset_id: uuid.UUID,
     payload: AnalyzeRequest,
@@ -121,7 +130,11 @@ def analyze_dataset(
         ) from exc
 
 
-@router.post("/{dataset_id}/ask-sql", response_model=AskSqlResponse)
+@router.post(
+    "/{dataset_id}/ask-sql",
+    response_model=AskSqlResponse,
+    dependencies=[Depends(rate_limit("ai", 20, 60))],
+)
 def ask_dataset_with_sql(
     dataset_id: uuid.UUID,
     payload: AskRequest,

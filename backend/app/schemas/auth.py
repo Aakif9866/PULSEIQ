@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.user import UserRead
 
@@ -15,4 +15,8 @@ class AuthResponse(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(max_length=2048)
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(max_length=128)

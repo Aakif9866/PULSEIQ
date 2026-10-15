@@ -60,7 +60,8 @@ class UsageRepository:
         self._db.refresh(entry)
         return entry
 
-    def totals_since(self, owner_id: uuid.UUID, since: datetime) -> UsageWindowTotals:
+    def totals_since(self, owner_id: uuid.UUID | None, since: datetime) -> UsageWindowTotals:
+        """owner_id=None totals every user (the app-wide cap)."""
         stmt = select(
             func.count(AiUsageLog.id),
             func.count(AiUsageLog.id).filter(AiUsageLog.cache_hit.is_(True)),
@@ -68,7 +69,9 @@ class UsageRepository:
             func.coalesce(func.sum(AiUsageLog.completion_tokens), 0),
             func.coalesce(func.sum(AiUsageLog.total_tokens), 0),
             func.sum(AiUsageLog.estimated_cost_usd),
-        ).where(AiUsageLog.owner_id == owner_id, AiUsageLog.created_at >= since)
+        ).where(AiUsageLog.created_at >= since)
+        if owner_id is not None:
+            stmt = stmt.where(AiUsageLog.owner_id == owner_id)
         requests, cache_hits, prompt, completion, total, cost = self._db.execute(stmt).one()
         return UsageWindowTotals(
             requests=int(requests),

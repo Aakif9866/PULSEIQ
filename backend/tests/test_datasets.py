@@ -240,3 +240,47 @@ def test_upload_cleans_up_the_file_if_the_db_write_fails(db_session, tmp_path, m
         )
 
     assert _stored_files(tmp_path) == []
+
+
+def test_upload_rejects_beyond_per_user_dataset_limit(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_DATASETS_PER_USER", 2)
+    token = _signup_and_token(client, "limit@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    file = {"file": ("a.csv", b"id\n1\n", "text/csv")}
+
+    for _ in range(2):
+        assert client.post("/api/v1/datasets", headers=headers, files=file).status_code == 201
+    resp = client.post("/api/v1/datasets", headers=headers, files=file)
+
+    assert resp.status_code == 409
+    assert "up to 2 datasets" in resp.json()["detail"]
+    assert len(_stored_files(tmp_path)) == 2  # rejected before anything was stored
+
+    # Another user's quota is separate.
+    other = _signup_and_token(client, "limit-other@pulseiq.dev")
+    other_headers = {"Authorization": f"Bearer {other}"}
+    assert client.post("/api/v1/datasets", headers=other_headers, files=file).status_code == 201
+
+
+def test_upload_rejects_file_over_size_limit(client, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_UPLOAD_SIZE_MB", 1)
+    token = _signup_and_token(client, "big@pulseiq.dev")
+
+    resp = client.post(
+        "/api/v1/datasets",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("big.csv", b"x" * (1024 * 1024 + 1), "text/csv")},
+    )
+
+    assert resp.status_code == 413
+    assert "1 MB" in resp.json()["detail"]
+
+
+def test_public_stats_and_health_limits(client):
+    before = client.get("/api/v1/stats").json()["total_users"]
+    _signup_and_token(client, "counted@pulseiq.dev")
+
+    assert client.get("/api/v1/stats").json() == {"total_users": before + 1}
+    health = client.get("/api/v1/health").json()
+    assert health["max_upload_size_mb"] == settings.MAX_UPLOAD_SIZE_MB
+    assert health["max_datasets_per_user"] == settings.MAX_DATASETS_PER_USER

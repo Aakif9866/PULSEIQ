@@ -1,35 +1,44 @@
-FROM python:3.12-slim AS base
+# Two stages: compilers live only in the build stage; the runtime image
+# gets the installed virtualenv and runs as an unprivileged user.
+FROM python:3.12-slim AS build
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+ENV PIP_NO_CACHE_DIR=1
 
-WORKDIR /app
-
-# Build deps for psycopg / duckdb wheels on slim images
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl \
+# Build deps for any wheel that has to compile from source on slim images.
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
     && rm -rf /var/lib/apt/lists/*
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-COPY . .
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN useradd --create-home --uid 10001 app
+WORKDIR /app
+COPY --from=build /opt/venv /opt/venv
+COPY --chown=app:app . .
+# Local-storage uploads (dev / Docker Compose) need a writable directory.
+RUN mkdir -p /app/data/uploads && chown -R app:app /app/data
+USER app
 
 EXPOSE 8000
 
-# Shell form (not exec-form CMD) so $PORT actually expands — most PaaS
-# hosts (Railway included) inject a dynamic PORT and expect the container
-# to bind to it; ${PORT:-8000} keeps 8000 as the default for docker-compose
-# and plain `docker run`, where nothing sets PORT. Migrations run here
-# too, so this image is correct standalone (Railway builds the Dockerfile
-# directly, with no docker-compose.yml in the picture to supply that step).
+# Python instead of curl, so the runtime image needs no extra packages.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1'
+    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\", \"8000\")}/api/v1/health', timeout=4)"
 
-# The demo seeder (app/workers/seed_demo.py) is a no-op unless
-# DEMO_USER_EMAIL/DEMO_USER_PASSWORD are set. It runs after migrations
-# (it needs the tables) and before the server, and its `|| true` is
-# deliberate: a broken demo must never stop the API from booting, while a
-# failed migration still should.
-CMD ["sh", "-c", "alembic upgrade head && (python -m app.workers.seed_demo || true) && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Shell form so $PORT expands (Render injects PORT; 8000 is the default for
+# Docker Compose and plain `docker run`). Migrations run first, so the image
+# is correct standalone. The demo seeder is a no-op unless DEMO_USER_EMAIL/
+# DEMO_USER_PASSWORD are set; its `|| true` is deliberate: a broken demo
+# must never stop the API from booting, while a failed migration still should.
+# ponytail: migrations at boot are safe with one instance; run them as a
+# separate release step before scaling to several.
+CMD ["sh", "-c", "alembic upgrade head && (python -m app.workers.seed_demo || true) && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

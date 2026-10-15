@@ -10,6 +10,7 @@ Two Groq calls, not one:
 """
 import json
 
+from app.ai.guardrails import DATA_NOT_INSTRUCTIONS
 from app.core.config import settings
 from app.core.exceptions import AiResponseError
 from app.core.logging import get_logger
@@ -60,19 +61,20 @@ never describe a change as if it happened or could happen, even hypothetically."
 
 
 def _chat_completion(*, system_prompt: str, user_prompt: str, json_mode: bool) -> str:
-    from app.ai.groq_client import get_groq_client
+    from app.ai.groq_client import get_groq_client, note_usage
 
     client = get_groq_client()
     try:
         response = client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": system_prompt + DATA_NOT_INSTRUCTIONS},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
             response_format={"type": "json_object"} if json_mode else None,
         )
+        note_usage(response)
     except Exception as exc:
         logger.error("groq_request_failed", exc_info=True)
         raise AiResponseError("The AI provider request failed.") from exc

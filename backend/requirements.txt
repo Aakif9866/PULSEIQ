@@ -1,12 +1,13 @@
-fastapi==0.115.6
+fastapi==0.116.1
+# Pinned past CVE-2025-54121 (multipart upload blocking the event loop).
+starlette==0.47.3
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
 sqlalchemy==2.0.36
 alembic==1.14.0
 psycopg[binary]==3.2.3
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+PyJWT==2.10.1
 bcrypt==4.2.1
 python-multipart==0.0.20
 email-validator==2.2.0
@@ -39,3 +40,6 @@ structlog==24.4.0
 opentelemetry-api==1.44.0
 opentelemetry-sdk==1.44.0
 opentelemetry-exporter-otlp-proto-http==1.44.0
+
+# Optional error tracking — inert unless SENTRY_DSN is set (app/core/error_tracking.py).
+sentry-sdk==2.19.2

@@ -3,9 +3,11 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.ai.groq_client import count_tokens
 from app.analytics.loader import load_dataframe
 from app.core.email import send_email
 from app.core.exceptions import (
+    AiQuotaExceededError,
     AiResponseError,
     ColumnNotFoundError,
     DatasetNotFoundError,
@@ -27,6 +29,7 @@ from app.schemas.monitor import (
     MonitorRunResult,
     MonitorUpdate,
 )
+from app.services.usage_service import UsageService
 from app.storage.base import StorageProvider
 
 logger = get_logger(__name__)
@@ -242,8 +245,28 @@ class MonitorService:
             "direction": result.direction,
             "severity": result.severity,
         }
+        usage = UsageService(self._db)
         try:
-            return explain_anomaly(context)
+            usage.enforce_quota(monitor.owner_id)
+        except AiQuotaExceededError:
+            return None  # the anomaly is still recorded, just unexplained
+        try:
+            with count_tokens() as totals:
+                try:
+                    return explain_anomaly(context)
+                finally:
+                    if totals[0] or totals[1]:
+                        usage.record(
+                            owner_id=monitor.owner_id,
+                            dataset_id=monitor.dataset_id,
+                            source="ai_monitor_explain",
+                            status="ok",
+                            cache_hit=False,
+                            llm_calls=1,
+                            prompt_tokens=totals[0],
+                            completion_tokens=totals[1],
+                            total_tokens=totals[0] + totals[1],
+                        )
         except AiResponseError:
             logger.warning("anomaly_explanation_unavailable", monitor_id=str(monitor.id))
             return None

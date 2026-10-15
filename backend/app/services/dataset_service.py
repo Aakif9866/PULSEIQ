@@ -11,6 +11,7 @@ from app.analytics.query_engine import run_query as _run_query
 from app.core.concurrency import submit_in_context
 from app.core.config import settings
 from app.core.exceptions import (
+    DatasetLimitReachedError,
     DatasetNotFoundError,
     DatasetNotReadyError,
     FileTooLargeError,
@@ -19,7 +20,9 @@ from app.core.exceptions import (
     UnsupportedFileTypeError,
 )
 from app.core.logging import get_logger
+from app.demo import DEMO_FILENAME
 from app.models.dataset import Dataset
+from app.models.user import User
 from app.repositories.dataset_repository import DatasetRepository
 from app.schemas.dataset_query import DatasetQueryRequest, DatasetQueryResult
 from app.storage.base import StorageProvider
@@ -39,12 +42,33 @@ class DatasetService:
         self._repo = DatasetRepository(db)
         self._storage = storage
 
+    def ensure_can_upload(self, owner_id: uuid.UUID) -> None:
+        """Raises DatasetLimitReachedError at MAX_DATASETS_PER_USER. The
+        shared demo account never locks visitors out: its oldest upload
+        (never the seeded sample) is dropped to make room instead."""
+        if self._repo.count_for_owner(owner_id) < settings.MAX_DATASETS_PER_USER:
+            return
+        if self._is_demo_owner(owner_id):
+            oldest = self._repo.oldest_for_owner(owner_id, exclude_filename=DEMO_FILENAME)
+            if oldest is not None:
+                self.delete_owned(oldest.id, owner_id)
+                return
+        raise DatasetLimitReachedError(owner_id)
+
+    def _is_demo_owner(self, owner_id: uuid.UUID) -> bool:
+        if not settings.DEMO_USER_EMAIL:
+            return False
+        user = self._repo.db.get(User, owner_id)
+        return user is not None and user.email == settings.DEMO_USER_EMAIL.lower()
+
     def upload(
         self, *, owner_id: uuid.UUID, filename: str, content_type: str, data: bytes
     ) -> Dataset:
         extension = PurePosixPath(filename).suffix.lower()
         if extension not in settings.ALLOWED_UPLOAD_EXTENSIONS:
             raise UnsupportedFileTypeError(extension)
+
+        self.ensure_can_upload(owner_id)
 
         max_bytes = settings.MAX_UPLOAD_SIZE_MB * _BYTES_PER_MB
         if len(data) > max_bytes:

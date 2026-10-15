@@ -13,6 +13,7 @@ import re
 
 import polars as pl
 
+from app.ai.guardrails import DATA_NOT_INSTRUCTIONS
 from app.core.config import settings
 from app.core.exceptions import AiResponseError
 from app.core.logging import get_logger
@@ -68,7 +69,7 @@ def _strip_markdown_fence(text: str) -> str:
 
 
 def build_sql_from_question(question: str, dataset: Dataset, df: pl.DataFrame) -> str:
-    from app.ai.groq_client import get_groq_client
+    from app.ai.groq_client import get_groq_client, note_usage
 
     system_prompt = _SQL_SYSTEM_PROMPT.format(
         table=_TABLE_NAME, columns=_describe_columns(dataset, df)
@@ -79,11 +80,12 @@ def build_sql_from_question(question: str, dataset: Dataset, df: pl.DataFrame) -
         response = client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": system_prompt + DATA_NOT_INSTRUCTIONS},
                 {"role": "user", "content": question},
             ],
             temperature=0.1,
         )
+        note_usage(response)
     except Exception as exc:
         logger.error("sql_generation_request_failed", exc_info=True)
         raise AiResponseError("The AI provider request failed.") from exc

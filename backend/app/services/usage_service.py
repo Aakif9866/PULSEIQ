@@ -1,16 +1,11 @@
 """Per-user AI usage: recording, daily token quotas, and the summary the
 usage page shows — docs/PHASES.md Phase 8 step 4.
 
-What's counted, stated plainly: token usage is recorded for the hybrid
-AI Analyst (`/analyze`, the frontend's default AI path) — the only path
-that goes through the AIProvider abstraction, so the only one whose
-real token counts are available without rewriting working code (see
-app/ai/providers/usage_tracking.py). The deprecated `/ask` and the
-NL-to-SQL `/ask-sql` paths call the Groq client directly and don't
-report tokens yet. They *are* still blocked once a user is over quota
-(enforce_quota runs for all three), so the quota can't be bypassed by
-switching endpoints — their own spend just isn't added to the count.
-Documented in docs/AI_ANALYTICS.md as a known gap.
+What's counted: every model call. `/analyze` through
+app/ai/providers/usage_tracking.py; `/ask`, `/ask-sql`, and monitor
+explanations through app/ai/groq_client.count_tokens(). Two caps apply:
+AI_DAILY_TOKEN_QUOTA_PER_USER, and AI_DAILY_TOKEN_QUOTA_GLOBAL across all
+users, so many free sign-ups can't drain the provider's shared daily limit.
 """
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -18,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.exceptions import AiQuotaExceededError
+from app.core.exceptions import AiQuotaExceededError, AiServiceQuotaExceededError
 from app.core.logging import get_logger
 from app.repositories.usage_repository import UsageRepository
 from app.schemas.usage import UsageSummary
@@ -45,10 +40,16 @@ class UsageService:
         self._repo = UsageRepository(db)
 
     def enforce_quota(self, owner_id: uuid.UUID) -> None:
+        start, resets_at = _day_window(_now())
+        global_quota = settings.AI_DAILY_TOKEN_QUOTA_GLOBAL
+        if global_quota is not None:
+            used_all = self._repo.totals_since(None, start).total_tokens
+            if used_all >= global_quota:
+                logger.warning("ai_global_quota_exceeded", used=used_all, quota=global_quota)
+                raise AiServiceQuotaExceededError(resets_at.isoformat())
         quota = settings.AI_DAILY_TOKEN_QUOTA_PER_USER
         if quota is None:
             return
-        start, resets_at = _day_window(_now())
         used = self._repo.totals_since(owner_id, start).total_tokens
         if used >= quota:
             logger.info("ai_quota_exceeded", owner_id=str(owner_id), used=used, quota=quota)

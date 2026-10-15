@@ -43,8 +43,19 @@ class Settings(BaseSettings):
         description="Used to sign JWTs. Must be overridden in every non-local environment.",
     )
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24h
+    # Short-lived; the frontend refreshes silently. Refresh tokens rotate
+    # and are revocable server-side (refresh_tokens table).
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 14  # 14d
+
+    # --- Abuse protection ---
+    RATE_LIMIT_ENABLED: bool = True
+    # How many proxies append to X-Forwarded-For in front of the app
+    # (Render: 1). 0 = use the socket address (local dev, Docker Compose).
+    TRUSTED_PROXY_HOPS: int = 0
+
+    # --- Error tracking (optional): Sentry DSN; off when unset ---
+    SENTRY_DSN: str | None = None
 
     # --- CORS ---
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
@@ -75,7 +86,8 @@ class Settings(BaseSettings):
     R2_BUCKET_NAME: str | None = None
     R2_ENDPOINT_URL: str | None = None
 
-    MAX_UPLOAD_SIZE_MB: int = 200
+    MAX_UPLOAD_SIZE_MB: int = 50
+    MAX_DATASETS_PER_USER: int = 5
     ALLOWED_UPLOAD_EXTENSIONS: list[str] = [".csv", ".xlsx", ".xls"]
 
     # Reserved for a future scheduled cleanup job (needs the background
@@ -103,6 +115,8 @@ class Settings(BaseSettings):
     # None (the default) = no quota enforced, only usage recorded — opt-in,
     # so an existing deployment's behavior doesn't change underneath it.
     AI_DAILY_TOKEN_QUOTA_PER_USER: int | None = None
+    # App-wide cap; keep it under the provider's own daily limit (Groq free: 200k).
+    AI_DAILY_TOKEN_QUOTA_GLOBAL: int | None = None
 
     # --- Optional tracing (Phase 8 step 5) — see app/core/tracing.py ---
     # Standard OpenTelemetry variable names, but read through Settings on

@@ -12,6 +12,7 @@ from app.core.exceptions import (
     QueryTimeoutError,
     SavedQueryNotFoundError,
 )
+from app.core.rate_limit import rate_limit
 from app.models.user import User
 from app.schemas.history import (
     QueryHistoryRead,
@@ -31,7 +32,11 @@ def _not_found(detail: str):
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
-@router.post("/datasets/{dataset_id}/sql", response_model=RunSqlResponse)
+@router.post(
+    "/datasets/{dataset_id}/sql",
+    response_model=RunSqlResponse,
+    dependencies=[Depends(rate_limit("sql", 60, 60))],
+)
 def run_sql(
     dataset_id: uuid.UUID,
     payload: RunSqlRequest,

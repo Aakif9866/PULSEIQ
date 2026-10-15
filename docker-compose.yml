@@ -5,6 +5,9 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # nginx (the frontend container) appends the client IP for /api/.
+      TRUSTED_PROXY_HOPS: "1"
     ports:
       - "8000:8000"
     volumes:

@@ -119,3 +119,42 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 # otherwise the log lines this middleware itself emits would
                 # never carry the request_id they exist to attach.
                 structlog.contextvars.clear_contextvars()
+
+
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    # The API only ever returns JSON; nothing it serves should run or frame.
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "Cross-Origin-Resource-Policy": "same-site",
+}
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Security headers on every response, plus an early 413 for bodies
+    declared larger than any upload can be — rejected before the multipart
+    parser reads a byte of them."""
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        from app.core.config import settings
+
+        declared = request.headers.get("content-length")
+        max_body = (settings.MAX_UPLOAD_SIZE_MB + 1) * 1024 * 1024  # +1 MB multipart overhead
+        if declared and declared.isdigit() and int(declared) > max_body:
+            response: Response = JSONResponse(
+                status_code=413,
+                content={
+                    "detail": f"Upload limit: each file can be at most "
+                    f"{settings.MAX_UPLOAD_SIZE_MB} MB."
+                },
+            )
+        else:
+            response = await call_next(request)
+        response.headers.update(_SECURITY_HEADERS)
+        if settings.ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response

@@ -40,8 +40,8 @@ class ToolCallRecord(BaseModel):
 
 
 class ConversationTurn(BaseModel):
-    question: str
-    answer: str
+    question: str = Field(max_length=2000)
+    answer: str = Field(max_length=4000)
 
 
 class AnalyzeRequest(BaseModel):

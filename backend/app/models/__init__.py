@@ -6,6 +6,7 @@ from app.models.dataset import Dataset
 from app.models.history import QueryHistory, SavedQuery
 from app.models.insight import Insight
 from app.models.monitor import Anomaly, Monitor
+from app.models.refresh_token import RefreshToken
 from app.models.usage import AiUsageLog
 from app.models.user import User
 
@@ -18,6 +19,7 @@ __all__ = [
     "Insight",
     "Monitor",
     "QueryHistory",
+    "RefreshToken",
     "SavedQuery",
     "User",
 ]

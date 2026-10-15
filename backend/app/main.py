@@ -4,13 +4,19 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.error_tracking import configure_error_tracking
 from app.core.exceptions import DomainError
 from app.core.logging import configure_logging, get_logger
-from app.core.middleware import REQUEST_ID_HEADER, RequestLoggingMiddleware
+from app.core.middleware import (
+    REQUEST_ID_HEADER,
+    RequestLoggingMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.core.tracing import configure_tracing
 
 configure_logging(debug=settings.DEBUG)
 configure_tracing()
+configure_error_tracking()
 logger = get_logger(__name__)
 
 app = FastAPI(
@@ -22,6 +28,9 @@ app = FastAPI(
 
 # Order matters: middleware runs outside-in on the way in, inside-out on the
 # way out. CORS added last so it wraps everything, including error responses.
+# Innermost (Starlette runs the last-added middleware outermost), so its
+# early 413 still gets CORS headers and a request-logging line.
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,

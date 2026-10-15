@@ -29,6 +29,10 @@ class FileTooLargeError(DomainError):
     pass
 
 
+class DatasetLimitReachedError(DomainError):
+    pass
+
+
 class DatasetNotFoundError(DomainError):
     pass
 
@@ -74,6 +78,19 @@ class AiQuotaExceededError(DomainError):
         )
         self.used_tokens = used_tokens
         self.quota_tokens = quota_tokens
+        self.resets_at = resets_at
+
+
+class AiServiceQuotaExceededError(AiQuotaExceededError):
+    """The app-wide AI_DAILY_TOKEN_QUOTA_GLOBAL is used up — every user is
+    paused, not just this one. Same 429 handling as the per-user quota."""
+
+    def __init__(self, resets_at: str) -> None:
+        DomainError.__init__(
+            self, f"The AI analyst has reached today's limit for everyone. Resets at {resets_at}."
+        )
+        self.used_tokens = 0
+        self.quota_tokens = 0
         self.resets_at = resets_at
 
 

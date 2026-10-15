@@ -1,10 +1,14 @@
+import time
 import uuid
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
+from contextlib import contextmanager
 
 from sqlalchemy.orm import Session
 
 from app.ai.analyst import build_query_from_question, summarize_result
+from app.ai.groq_client import count_tokens
 from app.ai.sql_generator import build_sql_from_question
 from app.analytics.chart_suggestion import suggest_chart_type
 from app.analytics.loader import load_dataframe
@@ -31,11 +35,36 @@ class AnalystService:
         self._datasets = DatasetService(db, storage)
         self._storage = storage
         self._history = HistoryService(db, storage)
-        # These two paths don't report token usage yet (see
-        # app/services/usage_service.py), but an over-quota user is still
-        # blocked here — otherwise the quota on /analyze could be bypassed
-        # just by switching endpoints.
+        # Both paths are quota-checked and metered, so switching endpoints
+        # can't bypass the quota on /analyze.
         self._usage = UsageService(db)
+
+    @contextmanager
+    def _metered(self, owner_id: uuid.UUID, dataset_id: uuid.UUID, source: str) -> Iterator[None]:
+        """Records the tokens spent inside the block, even if it fails partway
+        (a validator rejection still cost the model call)."""
+        start = time.perf_counter()
+        status = "ok"
+        with count_tokens() as totals:
+            try:
+                yield
+            except Exception:
+                status = "error"
+                raise
+            finally:
+                if totals[0] or totals[1]:
+                    self._usage.record(
+                        owner_id=owner_id,
+                        dataset_id=dataset_id,
+                        source=source,
+                        status=status,
+                        cache_hit=False,
+                        llm_calls=1,
+                        prompt_tokens=totals[0],
+                        completion_tokens=totals[1],
+                        total_tokens=totals[0] + totals[1],
+                        latency_ms=round((time.perf_counter() - start) * 1000),
+                    )
 
     def ask(self, dataset_id: uuid.UUID, owner_id: uuid.UUID, question: str) -> AskResponse:
         if settings.AI_PROVIDER != "groq":
@@ -47,11 +76,12 @@ class AnalystService:
             raise DatasetNotReadyError(dataset.status)
         self._usage.enforce_quota(owner_id)
 
-        query = build_query_from_question(question, dataset)
-        # Re-checks ownership/status and enforces QUERY_ROW_LIMIT/QUERY_TIMEOUT_SECONDS
-        # exactly as a hand-built query would.
-        result = self._datasets.run_query(dataset_id, owner_id, query)
-        answer = summarize_result(question, result)
+        with self._metered(owner_id, dataset_id, "ai_structured"):
+            query = build_query_from_question(question, dataset)
+            # Re-checks ownership/status and enforces QUERY_ROW_LIMIT/
+            # QUERY_TIMEOUT_SECONDS exactly as a hand-built query would.
+            result = self._datasets.run_query(dataset_id, owner_id, query)
+            answer = summarize_result(question, result)
 
         self._history.log_ai_query(
             owner_id=owner_id,
@@ -86,18 +116,19 @@ class AnalystService:
         self._usage.enforce_quota(owner_id)
 
         df = load_dataframe(self._storage, dataset)
-        raw_sql = build_sql_from_question(question, dataset, df)
+        with self._metered(owner_id, dataset_id, "ai_sql"):
+            raw_sql = build_sql_from_question(question, dataset, df)
 
-        known_columns = {c["name"] for c in (dataset.columns_profile or [])}
-        safe_sql = validate_and_prepare(
-            raw_sql,
-            table_name="dataset",
-            allowed_columns=known_columns,
-            row_limit=settings.QUERY_ROW_LIMIT,
-        )
+            known_columns = {c["name"] for c in (dataset.columns_profile or [])}
+            safe_sql = validate_and_prepare(
+                raw_sql,
+                table_name="dataset",
+                allowed_columns=known_columns,
+                row_limit=settings.QUERY_ROW_LIMIT,
+            )
 
-        result = self._run_sql_bounded(df, safe_sql)
-        answer = summarize_result(question, result)
+            result = self._run_sql_bounded(df, safe_sql)
+            answer = summarize_result(question, result)
 
         self._history.log_ai_query(
             owner_id=owner_id,

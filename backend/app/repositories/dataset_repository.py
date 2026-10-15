@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.dataset import Dataset
@@ -37,6 +37,23 @@ class DatasetRepository:
     def get_owned(self, dataset_id: uuid.UUID, owner_id: uuid.UUID) -> Dataset | None:
         stmt = select(Dataset).where(Dataset.id == dataset_id, Dataset.owner_id == owner_id)
         return self._db.execute(stmt).scalar_one_or_none()
+
+    @property
+    def db(self) -> Session:
+        return self._db
+
+    def oldest_for_owner(self, owner_id: uuid.UUID, *, exclude_filename: str) -> Dataset | None:
+        return self._db.scalars(
+            select(Dataset)
+            .where(Dataset.owner_id == owner_id, Dataset.original_filename != exclude_filename)
+            .order_by(Dataset.created_at)
+            .limit(1)
+        ).first()
+
+    def count_for_owner(self, owner_id: uuid.UUID) -> int:
+        return self._db.scalar(
+            select(func.count()).select_from(Dataset).where(Dataset.owner_id == owner_id)
+        ) or 0
 
     def list_for_owner(self, owner_id: uuid.UUID) -> list[Dataset]:
         stmt = (

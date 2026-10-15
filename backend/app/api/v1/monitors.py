@@ -11,6 +11,7 @@ from app.core.exceptions import (
     DatasetNotReadyError,
     MonitorNotFoundError,
 )
+from app.core.rate_limit import rate_limit
 from app.models.user import User
 from app.schemas.monitor import (
     AnomalyRead,
@@ -113,7 +114,11 @@ def delete_monitor(
         raise _not_found("Monitor not found") from exc
 
 
-@router.post("/{monitor_id}/run", response_model=MonitorRunResult)
+@router.post(
+    "/{monitor_id}/run",
+    response_model=MonitorRunResult,
+    dependencies=[Depends(rate_limit("monitor-run", 20, 60))],
+)
 def run_monitor(
     monitor_id: uuid.UUID,
     current_user: User = Depends(get_current_user),

@@ -11,6 +11,7 @@ A small, deliberate duplication of app.ai.analyst's _chat_completion
 pattern rather than importing that private helper — keeps this feature
 from touching V1's AI Analyst code at all.
 """
+from app.ai.guardrails import DATA_NOT_INSTRUCTIONS
 from app.core.config import settings
 from app.core.exceptions import AiResponseError
 from app.core.logging import get_logger
@@ -47,7 +48,7 @@ def explain_anomaly(context: dict[str, object]) -> str:
     AiResponseError on any failure; callers decide how to degrade (see
     MonitorService.run_monitor, which persists the anomaly regardless and
     simply leaves explanation=None on failure)."""
-    from app.ai.groq_client import get_groq_client
+    from app.ai.groq_client import get_groq_client, note_usage
 
     lines = [f"{key}: {value}" for key, value in context.items()]
     user_prompt = "Anomaly details:\n" + "\n".join(lines)
@@ -57,11 +58,12 @@ def explain_anomaly(context: dict[str, object]) -> str:
         response = client.chat.completions.create(
             model=settings.GROQ_MODEL,
             messages=[
-                {"role": "system", "content": _EXPLAIN_SYSTEM_PROMPT},
+                {"role": "system", "content": _EXPLAIN_SYSTEM_PROMPT + DATA_NOT_INSTRUCTIONS},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
         )
+        note_usage(response)
     except Exception as exc:
         logger.error("anomaly_explanation_request_failed", exc_info=True)
         raise AiResponseError("The AI provider request failed.") from exc

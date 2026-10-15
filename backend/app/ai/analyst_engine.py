@@ -20,6 +20,7 @@ from opentelemetry.trace import Status, StatusCode
 from pydantic import ValidationError
 
 from app.ai.answer_validator import validate_findings
+from app.ai.guardrails import DATA_NOT_INSTRUCTIONS
 from app.ai.providers.base import AIProvider
 from app.ai.tool_specs import TOOL_SPECS, call_tool
 from app.core.exceptions import AiResponseError
@@ -163,7 +164,11 @@ def run_analysis(
     conversation_history: list[ConversationTurn] | None = None,
 ) -> AnalyzeResponse:
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _SYSTEM_PROMPT.format(column_overview=_column_overview(df))}
+        {
+            "role": "system",
+            "content": _SYSTEM_PROMPT.format(column_overview=_column_overview(df))
+            + DATA_NOT_INSTRUCTIONS,
+        }
     ]
     for turn in (conversation_history or [])[-_MAX_HISTORY_TURNS:]:
         messages.append({"role": "user", "content": turn.question})
@@ -232,7 +237,7 @@ def run_analysis(
             )
 
     if tools_exhausted:
-        logger.warning("analysis_hit_max_tool_iterations", question=question)
+        logger.warning("analysis_hit_max_tool_iterations", question_chars=len(question))
 
     if salvaged_final is not None:
         parsed: dict[str, Any] | None = salvaged_final
