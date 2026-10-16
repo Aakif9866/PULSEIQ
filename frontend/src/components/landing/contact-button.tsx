@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Mail } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -37,25 +38,38 @@ export function ContactButton({ side = 'bottom' }: { side?: 'top' | 'bottom' }) 
 
   return (
     <div ref={ref} className="relative inline-block">
-      <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Contact me"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
         <Mail className="h-4 w-4" strokeWidth={1.75} />
-        Contact me
+        <span className="hidden sm:inline">Contact me</span>
       </Button>
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Contact email"
-          className={cn(
-            'absolute right-0 z-20 flex items-center gap-2 whitespace-nowrap rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] px-3 py-2 text-sm shadow-lg',
-            side === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
-          )}
-        >
-          <span className="select-all text-[var(--color-fg)]">{EMAIL}</span>
-          <Button variant="secondary" size="sm" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="dialog"
+            aria-label="Contact email"
+            // Grows out of the button that opened it, and shrinks back into it.
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+            className={cn(
+              'material absolute right-0 z-50 flex items-center gap-2 whitespace-nowrap rounded-lg border border-[var(--color-border-strong)] px-3 py-2 text-sm shadow-xl',
+              side === 'top' ? 'bottom-full mb-2 origin-bottom-right' : 'top-full mt-2 origin-top-right',
+            )}
+          >
+            <span className="select-all font-medium text-[var(--color-fg)]">{EMAIL}</span>
+            <Button variant="secondary" size="sm" onClick={copy}>
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

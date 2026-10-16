@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
+import { IconChip } from '@/components/ui/icon-chip'
 import { PageHeader } from '@/components/layout/page-header'
 import { useDashboards } from '@/features/dashboards/api'
 import { useDatasets } from '@/features/datasets/api'
@@ -16,9 +17,9 @@ export function WorkspaceHomePage() {
   const recentDatasets = datasets?.slice(0, 5) ?? []
 
   const statTiles = [
-    { label: 'Datasets', value: String(datasets?.length ?? 0), icon: Database },
-    { label: 'Dashboards', value: String(dashboards?.length ?? 0), icon: LayoutDashboard },
-    { label: 'Insights saved', value: String(insights?.length ?? 0), icon: Star },
+    { label: 'Datasets', value: String(datasets?.length ?? 0), icon: Database, color: 'var(--color-teal)' },
+    { label: 'Dashboards', value: String(dashboards?.length ?? 0), icon: LayoutDashboard, color: 'var(--color-indigo)' },
+    { label: 'Insights saved', value: String(insights?.length ?? 0), icon: Star, color: 'var(--color-pink)' },
   ]
 
   return (
@@ -36,23 +37,23 @@ export function WorkspaceHomePage() {
         }
       />
 
-      <div className="grid grid-cols-3 gap-3 px-4 py-5 sm:px-6">
-        {statTiles.map(({ label, value, icon: Icon }) => (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 px-4 py-5 sm:px-6">
+        {statTiles.map(({ label, value, icon, color }) => (
           <Card key={label}>
             <CardContent className="flex items-center justify-between py-4">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-[var(--color-fg-subtle)]">
                   {label}
                 </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
               </div>
-              <Icon className="h-5 w-5 text-[var(--color-fg-subtle)]" strokeWidth={1.5} />
+              <IconChip icon={icon} color={color} />
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 px-6 pb-6">
+      <div className="grid grid-cols-1 gap-3 px-4 pb-6 sm:px-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Recent datasets</CardTitle>
@@ -75,14 +76,16 @@ export function WorkspaceHomePage() {
             ) : (
               <ul className="divide-y divide-[var(--color-border)]">
                 {recentDatasets.map((dataset) => (
-                  <li
-                    key={dataset.id}
-                    className="flex items-center justify-between gap-3 py-2 text-sm first:pt-0 last:pb-0"
-                  >
-                    <span className="truncate text-[var(--color-fg)]">{dataset.original_filename}</span>
-                    <span className="shrink-0 text-xs text-[var(--color-fg-muted)]">
-                      {formatBytes(dataset.size_bytes)} · {formatDate(dataset.created_at)}
-                    </span>
+                  <li key={dataset.id}>
+                    <Link
+                      to={`/workspace/datasets/${dataset.id}`}
+                      className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-[var(--color-surface-raised)]"
+                    >
+                      <span className="truncate text-[var(--color-fg)]">{dataset.original_filename}</span>
+                      <span className="shrink-0 text-xs text-[var(--color-fg-muted)]">
+                        {formatBytes(dataset.size_bytes)} · {formatDate(dataset.created_at)}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -1,4 +1,4 @@
-import { ProtectedRoute } from '@/components/layout/protected-route'
+import { GuestRoute, ProtectedRoute } from '@/components/layout/protected-route'
 import { LandingPage } from '@/pages/landing-page'
 import { type ComponentType, lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
@@ -93,8 +93,10 @@ export default function App() {
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/signup" element={<SignupPage />} />
+          <Route element={<GuestRoute />}>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/signup" element={<SignupPage />} />
+          </Route>
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
 

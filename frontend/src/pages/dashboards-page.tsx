@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
+import { IconChip } from '@/components/ui/icon-chip'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
@@ -90,12 +91,7 @@ export function DashboardsPage() {
                     to={`/workspace/dashboards/${dashboard.id}`}
                     className="flex min-w-0 flex-1 items-center gap-3"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-raised)]">
-                      <LayoutDashboard
-                        className="h-4 w-4 text-[var(--color-fg-muted)]"
-                        strokeWidth={1.5}
-                      />
-                    </div>
+                    <IconChip icon={LayoutDashboard} color="var(--color-indigo)" className="h-8 w-8" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--color-fg)]">
                         {dashboard.name}

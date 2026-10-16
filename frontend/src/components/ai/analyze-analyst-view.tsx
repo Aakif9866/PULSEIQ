@@ -50,7 +50,7 @@ function FindingRow({ finding }: { finding: Finding }) {
         <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--color-fg-muted)]">
           <span>{CONFIDENCE_LABEL[finding.confidence]}</span>
           {finding.classification && (
-            <span className="rounded-full bg-[var(--color-accent-muted)] px-2 py-0.5 text-[var(--color-accent-fg)]">
+            <span className="rounded-full bg-[var(--color-accent-muted)] px-2 py-0.5 text-[var(--color-accent)]">
               {finding.classification.replaceAll('_', ' ')}
             </span>
           )}

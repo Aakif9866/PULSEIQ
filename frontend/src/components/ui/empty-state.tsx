@@ -1,3 +1,4 @@
+import { IconChip } from '@/components/ui/icon-chip'
 import { cn } from '@/lib/utils'
 import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -10,7 +11,7 @@ interface EmptyStateProps {
   className?: string
 }
 
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -18,9 +19,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         className,
       )}
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--color-surface-raised)]">
-        <Icon className="h-5 w-5 text-[var(--color-fg-muted)]" strokeWidth={1.5} />
-      </div>
+      <IconChip icon={icon} className="h-11 w-11 rounded-xl" />
       <div className="space-y-1">
         <p className="text-sm font-medium text-[var(--color-fg)]">{title}</p>
         <p className="max-w-sm text-xs text-[var(--color-fg-muted)]">{description}</p>

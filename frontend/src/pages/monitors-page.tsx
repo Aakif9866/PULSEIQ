@@ -1,5 +1,6 @@
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
+import { IconChip } from '@/components/ui/icon-chip'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
@@ -130,7 +131,7 @@ export function MonitorsPage() {
           >
             {formError && <p className="text-xs text-[var(--color-negative)]">{formError}</p>}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="monitor-dataset">Dataset</Label>
                 <Select
@@ -161,7 +162,7 @@ export function MonitorsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="monitor-time-column">Time column</Label>
                 <Select
@@ -210,7 +211,7 @@ export function MonitorsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="monitor-baseline">Baseline</Label>
                 <Select
@@ -314,9 +315,7 @@ export function MonitorsPage() {
                     to={`/workspace/monitors/${monitor.id}`}
                     className="flex min-w-0 flex-1 items-center gap-3"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[var(--color-surface-raised)]">
-                      <Radar className="h-4 w-4 text-[var(--color-fg-muted)]" strokeWidth={1.5} />
-                    </div>
+                    <IconChip icon={Radar} color="var(--color-orange)" className="h-8 w-8" />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--color-fg)]">
                         {monitor.name}

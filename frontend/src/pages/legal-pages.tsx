@@ -1,5 +1,5 @@
 import { SiteFooter } from '@/components/landing/site-footer'
-import { Activity } from 'lucide-react'
+import { Brand } from '@/components/brand'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -10,11 +10,8 @@ function LegalLayout({ title, children }: { title: string; children: ReactNode }
   return (
     <div className="min-h-screen bg-[var(--color-canvas)] text-[var(--color-fg)]">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-5 sm:px-6">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-sm bg-[var(--color-accent)]">
-            <Activity className="h-4 w-4 text-[var(--color-accent-fg)]" strokeWidth={2.5} />
-          </span>
-          <span className="text-base font-semibold tracking-tight">PulseIQ</span>
+        <Link to="/" aria-label="PulseIQ home">
+          <Brand />
         </Link>
         <nav aria-label="Legal" className="flex gap-4 text-sm text-[var(--color-fg-muted)]">
           <Link to="/privacy" className="hover:text-[var(--color-fg)]">

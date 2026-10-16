@@ -1,5 +1,5 @@
 /**
- * Chart color tokens for PulseIQ's dark-only surface.
+ * Chart color tokens for PulseIQ (light and dark).
  *
  * These are the dataviz-skill reference categorical palette's dark steps,
  * validated (scripts/validate_palette.js --mode dark --surface #101114,
@@ -18,14 +18,26 @@ export const CHART_SERIES_COLORS = [
   '#e66767', // 8 red
 ] as const
 
-/** Chart chrome — matches this app's own --color-* tokens (index.css) so a
- * chart reads as part of the app, not a pasted-in widget. Canvas-rendered,
- * so these must be literal values, not CSS custom properties. */
+/** Chart chrome per theme — mirrors the --color-* tokens in index.css so a
+ * chart reads as part of the app. ECharts needs literal values, not CSS
+ * custom properties, so charts re-render when the theme flips. */
 export const CHART_CHROME = {
-  axisLine: '#34363c', // --color-border-strong
-  splitLine: '#24262b', // --color-border
-  axisLabel: '#9a9da5', // --color-fg-muted
-  tooltipBg: '#16181c', // --color-surface-raised
-  tooltipBorder: '#24262b', // --color-border
-  tooltipText: '#e7e8ea', // --color-fg
+  dark: {
+    axisLine: '#3a3a3c', // --color-border-strong
+    splitLine: '#2c2c2e', // --color-border
+    axisLabel: '#a1a1a6', // --color-fg-muted
+    tooltipBg: '#2c2c2e', // --color-surface-raised
+    tooltipBorder: '#3a3a3c',
+    tooltipText: '#f5f5f7', // --color-fg
+    sliceBorder: '#1c1c1e', // --color-surface
+  },
+  light: {
+    axisLine: '#d1d1d6',
+    splitLine: '#e5e5ea',
+    axisLabel: '#6e6e73',
+    tooltipBg: '#ffffff',
+    tooltipBorder: '#d1d1d6',
+    tooltipText: '#1d1d1f',
+    sliceBorder: '#ffffff',
+  },
 } as const

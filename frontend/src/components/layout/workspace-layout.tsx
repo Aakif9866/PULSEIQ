@@ -1,3 +1,7 @@
+import { Brand } from '@/components/brand'
+import { ContactButton } from '@/components/landing/contact-button'
+import { UserCount } from '@/components/landing/user-count'
+import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { useLogout } from '@/features/auth/api'
 import { useAuthStore } from '@/stores/auth-store'
@@ -18,27 +22,17 @@ import {
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
+// Each section keeps one color everywhere, so it's recognizable at a glance.
 const NAV_ITEMS = [
-  { to: '/workspace', label: 'Workspace', icon: SquareStack, end: true },
-  { to: '/workspace/datasets', label: 'Datasets', icon: Database },
-  { to: '/workspace/dashboards', label: 'Dashboards', icon: LayoutDashboard },
-  { to: '/workspace/ai-analyst', label: 'AI Analysis', icon: Sparkles },
-  { to: '/workspace/insights', label: 'Saved Insights', icon: Activity },
-  { to: '/workspace/monitors', label: 'Monitors', icon: Radar },
-  { to: '/workspace/usage', label: 'Usage', icon: Gauge },
-  { to: '/workspace/settings', label: 'Settings', icon: Settings },
+  { to: '/workspace', label: 'Workspace', icon: SquareStack, color: 'var(--color-accent)', end: true },
+  { to: '/workspace/datasets', label: 'Datasets', icon: Database, color: 'var(--color-teal)' },
+  { to: '/workspace/dashboards', label: 'Dashboards', icon: LayoutDashboard, color: 'var(--color-indigo)' },
+  { to: '/workspace/ai-analyst', label: 'AI Analysis', icon: Sparkles, color: 'var(--color-purple)' },
+  { to: '/workspace/insights', label: 'Saved Insights', icon: Activity, color: 'var(--color-pink)' },
+  { to: '/workspace/monitors', label: 'Monitors', icon: Radar, color: 'var(--color-orange)' },
+  { to: '/workspace/usage', label: 'Usage', icon: Gauge, color: 'var(--color-positive)' },
+  { to: '/workspace/settings', label: 'Settings', icon: Settings, color: 'var(--color-fg-muted)' },
 ]
-
-function Brand() {
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-[var(--color-accent)]">
-        <Activity className="h-3.5 w-3.5 text-[var(--color-accent-fg)]" strokeWidth={2.5} />
-      </div>
-      <span className="text-sm font-semibold tracking-tight">PulseIQ</span>
-    </div>
-  )
-}
 
 export function WorkspaceLayout() {
   const user = useAuthStore((s) => s.user)
@@ -61,23 +55,25 @@ export function WorkspaceLayout() {
 
   return (
     <div className="flex h-dvh w-full bg-[var(--color-canvas)] text-[var(--color-fg)]">
-      {menuOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
-          aria-hidden="true"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
+      {/* Always mounted so the scrim fades both ways instead of popping. */}
+      <div
+        className={cn(
+          'fixed inset-0 z-30 bg-black/40 transition-opacity duration-300 md:hidden',
+          menuOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+        )}
+        aria-hidden="true"
+        onClick={() => setMenuOpen(false)}
+      />
 
       <aside
         id="workspace-nav"
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-transform md:static md:w-60 md:shrink-0 md:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--color-border)] bg-[var(--color-canvas)] transition-transform duration-300 ease-apple md:static md:w-60 md:shrink-0 md:translate-x-0',
           menuOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-4">
-          <Brand />
+        <div className="flex h-14 items-center justify-between px-4">
+          <Brand size="sm" />
           <Button
             variant="ghost"
             size="icon"
@@ -90,7 +86,7 @@ export function WorkspaceLayout() {
         </div>
 
         <nav aria-label="Workspace" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {NAV_ITEMS.map(({ to, label, icon: Icon, color, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -98,21 +94,30 @@ export function WorkspaceLayout() {
               onClick={() => setMenuOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm transition-colors md:py-2',
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-2.5 text-sm transition-[background-color,color,transform] duration-100 active:scale-[0.98] md:py-2',
                   isActive
-                    ? 'bg-[var(--color-accent-muted)] text-[var(--color-fg)]'
+                    ? 'font-medium text-[var(--color-fg)]'
                     : 'text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-fg)]',
                 )
               }
+              style={({ isActive }) =>
+                isActive ? { backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)` } : undefined
+              }
             >
-              <Icon className="h-4 w-4" strokeWidth={1.75} />
+              <Icon className="h-4 w-4" strokeWidth={2} style={{ color }} />
               {label}
             </NavLink>
           ))}
         </nav>
 
         <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] px-3 py-3">
-          <div className="min-w-0">
+          <span
+            aria-hidden="true"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--color-purple),var(--color-pink))] text-xs font-semibold text-white"
+          >
+            {(user?.full_name || user?.email || '?').charAt(0).toUpperCase()}
+          </span>
+          <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-medium text-[var(--color-fg)]">
               {user?.full_name || user?.email}
             </p>
@@ -124,11 +129,13 @@ export function WorkspaceLayout() {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 md:hidden">
+      <main id="main" className="min-w-0 flex-1 overflow-y-auto">
+        {/* Translucent bar: page content scrolls underneath it. */}
+        <header className="material sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-[var(--color-border)] px-3 sm:px-6">
           <Button
             variant="ghost"
             size="icon"
+            className="md:hidden"
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
             aria-expanded={menuOpen}
@@ -136,13 +143,17 @@ export function WorkspaceLayout() {
           >
             <Menu className="h-5 w-5" strokeWidth={1.75} />
           </Button>
-          <Brand />
+          <span className="md:hidden">
+            <Brand size="sm" />
+          </span>
+          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+            <UserCount />
+            <ContactButton />
+            <ThemeToggle />
+          </div>
         </header>
-
-        <main id="main" className="min-w-0 flex-1 overflow-y-auto">
-          <Outlet />
-        </main>
-      </div>
+        <Outlet />
+      </main>
     </div>
   )
 }

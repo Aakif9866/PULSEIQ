@@ -3,6 +3,7 @@ import { KpiCard } from '@/components/dashboards/kpi-card'
 import { ResultTable } from '@/components/dashboards/result-table'
 import { useDatasetQueryResult } from '@/features/datasets/api'
 import { buildChartOption } from '@/lib/chart-options'
+import { useTheme } from '@/lib/theme'
 import type { DashboardChart } from '@/types/dashboard'
 import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
 import ReactECharts from 'echarts-for-react'
@@ -17,6 +18,7 @@ interface ChartCardProps {
 }
 
 export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLast }: ChartCardProps) {
+  const theme = useTheme()
   const { data: result, isLoading, isError } = useDatasetQueryResult(
     chart.dataset_id,
     chart.query_request,
@@ -34,7 +36,7 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
             type="button"
             onClick={onMoveUp}
             disabled={isFirst}
-            className="rounded p-1 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
+            className="rounded-md p-1.5 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
             aria-label="Move chart up"
           >
             <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -43,7 +45,7 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
             type="button"
             onClick={onMoveDown}
             disabled={isLast}
-            className="rounded p-1 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
+            className="rounded-md p-1.5 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
             aria-label="Move chart down"
           >
             <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -51,7 +53,7 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
           <button
             type="button"
             onClick={onDelete}
-            className="rounded p-1 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)]"
+            className="rounded-md p-1.5 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)]"
             aria-label="Remove chart"
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
@@ -73,7 +75,7 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
         {result && chart.chart_type === 'table' && <ResultTable result={result} />}
         {result && chart.chart_type !== 'kpi' && chart.chart_type !== 'table' && (
           <ReactECharts
-            option={buildChartOption(result, chart.chart_type)}
+            option={buildChartOption(result, chart.chart_type, theme)}
             style={{ height: 260 }}
             opts={{ renderer: 'svg' }}
           />
