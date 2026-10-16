@@ -240,6 +240,9 @@ class GroqProvider(AIProvider):
                 logger.warning(
                     "groq_provider_request_failed",
                     attempt=attempt, error=str(exc), retry_delay_seconds=round(delay, 2),
+                    # The SDK's "Connection error." hides the real reason
+                    # (DNS, TLS, illegal header...); its __cause__ has it.
+                    cause=repr(exc.__cause__) if exc.__cause__ else None,
                 )
                 if delay:
                     time.sleep(delay)

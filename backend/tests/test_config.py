@@ -33,3 +33,16 @@ def test_development_allows_the_default_secret_key(monkeypatch):
     # to contain."
     settings = Settings(ENVIRONMENT="development", _env_file=None)
     assert settings.SECRET_KEY == "insecure-dev-secret-change-me"
+
+
+def test_pasted_values_are_trimmed():
+    # A trailing newline from a dashboard paste once broke every R2 call.
+    settings = Settings(
+        _env_file=None,
+        R2_ACCOUNT_ID="abc123\n",
+        GROQ_API_KEY=' "gsk_key" ',
+        R2_BUCKET_NAME="'pulse-iq'",
+    )
+    assert settings.R2_ACCOUNT_ID == "abc123"
+    assert settings.GROQ_API_KEY == "gsk_key"
+    assert settings.R2_BUCKET_NAME == "pulse-iq"

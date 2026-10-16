@@ -31,6 +31,20 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def _strip_pasted_whitespace(cls, value: object) -> object:
+        """Values pasted into a hosting dashboard often pick up a trailing
+        newline/space or wrapping quotes. Invisible there, fatal here: a
+        newline in R2_ACCOUNT_ID made every storage call raise ValueError,
+        and one in an API key breaks the HTTP header. Trim them all."""
+        if not isinstance(value, str):
+            return value
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1].strip()
+        return value
+
     # --- App ---
     APP_NAME: str = "PulseIQ"
     ENVIRONMENT: Literal["development", "test", "production"] = "development"
