@@ -70,7 +70,7 @@ class DeepAnalysisService:
         # different and must never be served from an earlier, context-
         # free answer.
         cacheable = not payload.conversation_history
-        key = cache_key(dataset_id, payload.question) if cacheable else None
+        key = cache_key(dataset_id, payload.question, dataset.version) if cacheable else None
         if key is not None:
             cached = _answer_cache.get(key)
             if cached is not None:

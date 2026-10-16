@@ -29,7 +29,7 @@ const NAV_ITEMS = [
   { to: '/workspace/dashboards', label: 'Dashboards', icon: LayoutDashboard, color: 'var(--color-indigo)' },
   { to: '/workspace/ai-analyst', label: 'AI Analysis', icon: Sparkles, color: 'var(--color-purple)' },
   { to: '/workspace/insights', label: 'Saved Insights', icon: Activity, color: 'var(--color-pink)' },
-  { to: '/workspace/monitors', label: 'Monitors', icon: Radar, color: 'var(--color-orange)' },
+  { to: '/workspace/monitors', label: 'Anomaly checks', icon: Radar, color: 'var(--color-orange)' },
   { to: '/workspace/usage', label: 'Usage', icon: Gauge, color: 'var(--color-positive)' },
   { to: '/workspace/settings', label: 'Settings', icon: Settings, color: 'var(--color-fg-muted)' },
 ]

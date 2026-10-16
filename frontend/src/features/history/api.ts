@@ -27,6 +27,14 @@ export function useQueryHistory(datasetId: string) {
   })
 }
 
+/** Every dataset's history, newest first — the workspace's recent activity. */
+export function useRecentActivity() {
+  return useQuery({
+    queryKey: ['history', 'all'],
+    queryFn: () => apiClient.get<QueryHistoryItem[]>('/history'),
+  })
+}
+
 export function useSavedQueries(datasetId: string) {
   return useQuery({
     queryKey: savedKey(datasetId),

@@ -8,6 +8,14 @@ type Chrome = (typeof CHART_CHROME)[Theme]
 
 const MAX_PIE_SLICES = 6
 
+/** 1,284 / 12.9K / 4.2M: keeps value-axis labels short. */
+const compact = (value: number) =>
+  Math.abs(value) >= 1_000_000
+    ? `${+(value / 1_000_000).toFixed(1)}M`
+    : Math.abs(value) >= 10_000
+      ? `${+(value / 1_000).toFixed(1)}K`
+      : value.toLocaleString()
+
 /** Builds an ECharts option from a query result. `kpi` and `table` chart
  * types never reach this function — they're rendered as plain React
  * components (KpiCard / ResultTable) instead, since neither is really a
@@ -33,7 +41,7 @@ function buildCartesianOption(
   chartType: 'bar' | 'line' | 'area',
   chrome: Chrome,
 ): EChartsOption {
-  const [categoryColumn, ...seriesColumns] = result.columns
+  const [, ...seriesColumns] = result.columns
   const categories = result.rows.map((row) => String(row[0] ?? ''))
   const showLegend = seriesColumns.length >= 2
 
@@ -70,7 +78,7 @@ function buildCartesianOption(
   return {
     color: [...CHART_SERIES_COLORS],
     textStyle: { color: chrome.axisLabel, fontFamily: 'inherit' },
-    grid: { left: 48, right: 16, top: showLegend ? 36 : 16, bottom: 32 },
+    grid: { left: 8, right: 16, top: showLegend ? 36 : 16, bottom: 8, containLabel: true },
     legend: showLegend
       ? { show: true, textStyle: { color: chrome.axisLabel }, top: 0 }
       : { show: false },
@@ -83,7 +91,8 @@ function buildCartesianOption(
     },
     xAxis: {
       type: 'category',
-      name: categoryColumn,
+      // The axis title is dropped: at the right edge it was clipped, and
+      // the chart's own title already names the category.
       data: categories,
       axisLine: { lineStyle: { color: chrome.axisLine } },
       axisLabel: { color: chrome.axisLabel },
@@ -92,7 +101,7 @@ function buildCartesianOption(
     yAxis: {
       type: 'value',
       axisLine: { show: false },
-      axisLabel: { color: chrome.axisLabel },
+      axisLabel: { color: chrome.axisLabel, formatter: compact },
       splitLine: { lineStyle: { color: chrome.splitLine } },
     },
     series,
@@ -110,7 +119,7 @@ function buildScatterOption(result: DatasetQueryResult, chrome: Chrome): ECharts
   return {
     color: [CHART_SERIES_COLORS[0]],
     textStyle: { color: chrome.axisLabel, fontFamily: 'inherit' },
-    grid: { left: 48, right: 16, top: 16, bottom: 32 },
+    grid: { left: 8, right: 16, top: 16, bottom: 8, containLabel: true },
     tooltip: {
       trigger: 'item',
       backgroundColor: chrome.tooltipBg,
@@ -128,7 +137,7 @@ function buildScatterOption(result: DatasetQueryResult, chrome: Chrome): ECharts
       type: 'value',
       name: yColumn,
       axisLine: { show: false },
-      axisLabel: { color: chrome.axisLabel },
+      axisLabel: { color: chrome.axisLabel, formatter: compact },
       splitLine: { lineStyle: { color: chrome.splitLine } },
     },
     series: [

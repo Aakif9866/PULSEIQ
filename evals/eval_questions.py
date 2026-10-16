@@ -37,6 +37,16 @@ class EvalQuestion:
     notes: str = ""
     tolerance_pct: float = 2.0
     extra_matches: list[Any] = field(default_factory=list)
+    # v3 additions (all optional, so the 51 baseline questions are unchanged):
+    # at least one of these phrases must appear in the answer...
+    must_mention_any: list[str] = field(default_factory=list)
+    # ...and none of these may (an unsupported or injected claim).
+    must_not_mention: list[str] = field(default_factory=list)
+    # Asked first, with its answer passed as conversation history, so this
+    # question is scored as a follow-up.
+    follow_up_of: str | None = None
+    # Written before any prompt change and never used to tune prompts.
+    held_out: bool = False
 
 
 QUESTIONS: list[EvalQuestion] = [

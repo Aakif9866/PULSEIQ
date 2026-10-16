@@ -322,3 +322,315 @@ def get_top_records(df: pl.DataFrame, column: str, n: int = 10) -> dict[str, Any
 def get_bottom_records(df: pl.DataFrame, column: str, n: int = 10) -> dict[str, Any]:
     _require_column(df, column)
     return {"column": column, "n": n, "rows": df.sort(column, descending=False).head(n).to_dicts()}
+
+
+# ------------------------------------------------- change / contribution ----
+
+_TRUNCATE_UNITS = {"day": "1d", "week": "1w", "month": "1mo", "quarter": "1q", "year": "1y"}
+_ADDITIVE_OPS = {"sum", "count"}
+_MAX_AUTO_DIMENSIONS = 4
+_MAX_DIMENSION_CARDINALITY = 50
+_SMALL_GROUP_ROWS = 5
+_MAX_CATEGORY_LABEL_CHARS = 30
+_CAUSAL_CAVEAT = (
+    "Contribution shows where the change happened, not why it happened; "
+    "it is not proof of cause."
+)
+
+
+def period_label(period: str, freq: str) -> str:
+    """A bucket's start date ("2024-03-01") as people say it for its
+    granularity: 2024-03-01 for a day, "week of 2024-03-04", 2024-03 for a
+    month, 2024-Q1, 2024. Slicing to the month for everything made two
+    consecutive days read as "2024-01 vs 2024-01"."""
+    if freq == "day":
+        return period[:10]
+    if freq == "week":
+        return f"week of {period[:10]}"
+    if freq == "month":
+        return period[:7]
+    if freq == "quarter":
+        return f"{period[:4]}-Q{(int(period[5:7]) - 1) // 3 + 1}"
+    return period[:4]
+
+
+def _with_period(df: pl.DataFrame, date_column: str, freq: str) -> pl.DataFrame:
+    """Adds a __period column (the date truncated to `freq`), dropping rows
+    whose date can't be parsed. Accepts real date/datetime columns as-is."""
+    col = pl.col(date_column)
+    if df.schema[date_column] in (pl.Date, pl.Datetime):
+        as_date = col.cast(pl.Date)
+    else:
+        as_date = col.cast(pl.Utf8, strict=False).str.to_date(strict=False)
+    unit = _TRUNCATE_UNITS[freq]
+    try:
+        return (
+            df.with_columns(as_date.alias("__date"))
+            .drop_nulls("__date")
+            .with_columns(pl.col("__date").dt.truncate(unit).alias("__period"))
+        )
+    except pl.exceptions.ComputeError:
+        # Polars raises (rather than returning nulls) when no date format
+        # fits the text at all; callers treat an empty frame as unparsable.
+        return df.clear().with_columns(
+            pl.lit(None, pl.Date).alias("__date"), pl.lit(None, pl.Date).alias("__period")
+        )
+
+
+def _metric_expr(op: str, metric_column: str | None) -> pl.Expr:
+    if op == "count":
+        return pl.len().cast(pl.Float64).alias("value")
+    value = pl.col(metric_column).cast(pl.Float64, strict=False)
+    return {"sum": value.sum(), "avg": value.mean()}[op].alias("value")
+
+
+def _mean_nonblank_length(series: pl.Series) -> float:
+    """Average length of the non-empty values: a mostly blank notes column
+    is still free text."""
+    lengths = series.drop_nulls().str.strip_chars().str.len_chars()
+    return lengths.filter(lengths > 0).mean() or 0.0
+
+
+def _auto_dimensions(df: pl.DataFrame, exclude: set[str]) -> list[str]:
+    """Low-cardinality text/boolean columns: the ones a change can
+    meaningfully be broken down by. IDs and free text (too many distinct
+    values) and numbers are never chosen."""
+    candidates: list[tuple[bool, int, str]] = []
+    for name, dtype in df.schema.items():
+        if name in exclude or name.startswith("__"):
+            continue
+        if dtype not in (pl.Utf8, pl.Categorical, pl.Boolean):
+            continue
+        distinct = df.get_column(name).n_unique()
+        # More than half the rows having their own value means an ID or
+        # free text, even when the dataset is small enough to stay under
+        # the cardinality cap.
+        looks_like_id = distinct > df.height / 2
+        # Sentences (notes, comments, descriptions) are free text, not
+        # categories: never a dimension, and never echoed back to the model
+        # as a "segment" (they can carry instructions planted in the data).
+        free_text = dtype == pl.Utf8 and (
+            _mean_nonblank_length(df.get_column(name)) > _MAX_CATEGORY_LABEL_CHARS
+        )
+        if 2 <= distinct <= _MAX_DIMENSION_CARDINALITY and not looks_like_id and not free_text:
+            named_like_id = name.lower() == "id" or name.lower().endswith(("_id", "id"))
+            # Segment-like columns (few values) first; ID-named ones last.
+            candidates.append((named_like_id, distinct, name))
+    return [name for *_, name in sorted(candidates)[:_MAX_AUTO_DIMENSIONS]]
+
+
+def _resolve_period(label: str | None, available: list[str], default: str) -> str | None:
+    """Matches a user-supplied period ("2024-03", "2024-03-01", "2024") to
+    a bucket by prefix; None when nothing matches (never a guess)."""
+    if label is None:
+        return default
+    matches = [p for p in available if p.startswith(str(label).strip())]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _round(value: float | None) -> float | None:
+    return None if value is None else round(value, 2)
+
+
+def explain_change(
+    df: pl.DataFrame,
+    date_column: str,
+    metric_column: str | None = None,
+    op: str = "sum",
+    freq: str = "month",
+    current_period: str | None = None,
+    previous_period: str | None = None,
+    dimensions: list[str] | None = None,
+    top_n: int = 5,
+) -> dict[str, Any]:
+    """How a metric changed between two periods, and which segments of
+    which dimensions account for that change (contribution analysis).
+
+    For additive metrics (sum, count) each segment's share of the total
+    change is reported; shares of offsetting segments can exceed 100% or
+    be negative, which is mathematically correct, not an error. Averages
+    aren't additive, so for "avg" only per-segment changes are reported."""
+    _require_column(df, date_column)
+    if op not in ("sum", "count", "avg"):
+        return {"error": "op must be one of: sum, count, avg."}
+    if op != "count":
+        if not metric_column:
+            return {"error": f"metric_column is required for op '{op}'."}
+        _require_column(df, metric_column)
+    if freq not in _TRUNCATE_UNITS:
+        return {"error": f"freq must be one of: {', '.join(_TRUNCATE_UNITS)}."}
+    top_n = max(1, min(int(top_n), 10))
+
+    data = _with_period(df, date_column, freq)
+    if data.height == 0:
+        return {"error": f"Could not parse '{date_column}' as dates."}
+    periods = [str(p) for p in data.get_column("__period").unique().sort().to_list()]
+    if len(periods) < 2:
+        return {
+            "error": f"Need at least two {freq}s of data to compare; found {len(periods)}.",
+            "available_periods": periods,
+        }
+
+    current = _resolve_period(current_period, periods, periods[-1])
+    if current is None:
+        return {
+            "error": f"No single {freq} matches '{current_period}'.",
+            "available_periods": periods[-24:],
+        }
+    before = [p for p in periods if p < current]
+    default_previous = before[-1] if before else None
+    previous = (
+        _resolve_period(previous_period, periods, default_previous)
+        if default_previous or previous_period
+        else None
+    )
+    if previous is None or previous >= current:
+        return {
+            "error": "Could not establish a valid earlier period to compare against.",
+            "available_periods": periods[-24:],
+        }
+
+    def total(period: str) -> tuple[float | None, int]:
+        rows = data.filter(pl.col("__period").cast(pl.Utf8) == period)
+        return rows.select(_metric_expr(op, metric_column)).item(), rows.height
+
+    prev_value, prev_rows = total(previous)
+    cur_value, cur_rows = total(current)
+    prev_value = prev_value or 0.0
+    cur_value = cur_value or 0.0
+    change = cur_value - prev_value
+    pct = None if prev_value == 0 else change / abs(prev_value) * 100
+
+    caveats = [_CAUSAL_CAVEAT]
+    if prev_value == 0:
+        caveats.append("The earlier period's value is zero, so a percentage change is undefined.")
+    if metric_column and op == "sum":
+        series = df.get_column(metric_column).cast(pl.Float64, strict=False)
+        if (series < 0).any():
+            caveats.append(
+                "The metric has negative values, so segments can offset each other; "
+                "read shares together with the absolute changes."
+            )
+    if op not in _ADDITIVE_OPS:
+        caveats.append(
+            "Averages are not additive: segment changes are shown, but not as shares of the total."
+        )
+    if op == "sum" and metric_column:
+        for label, period, period_total in (
+            ("earlier", previous, prev_value), ("later", current, cur_value)
+        ):
+            values = data.filter(pl.col("__period").cast(pl.Utf8) == period).get_column(
+                metric_column
+            ).cast(pl.Float64, strict=False)
+            biggest = values.max()
+            # With 1-2 rows one of them is always >= 50%: not a signal.
+            if period_total and biggest is not None and values.len() >= 3:
+                share = biggest / period_total * 100
+                if share >= 50:
+                    caveats.append(
+                        f"A single row makes up {share:.0f}% of the {label} period's total "
+                        f"({biggest:,.2f}); the change may reflect one outlier, not a trend."
+                    )
+    if current == periods[-1]:
+        latest_date = data.get_column("__date").max()
+        period_end = data.filter(pl.col("__period").cast(pl.Utf8) == current).select(
+            pl.col("__period").first().dt.offset_by(_TRUNCATE_UNITS[freq])
+        ).item()
+        span_days = (period_end - data.filter(
+            pl.col("__period").cast(pl.Utf8) == current
+        ).get_column("__period").first()).days
+        covered_days = (latest_date - data.filter(
+            pl.col("__period").cast(pl.Utf8) == current
+        ).get_column("__period").first()).days + 1
+        if span_days and covered_days / span_days < 0.6:
+            caveats.append(
+                f"The latest {freq} may be incomplete: the data ends on {latest_date}, "
+                f"{covered_days} of {span_days} days in."
+            )
+
+    exclude = {date_column, *([metric_column] if metric_column else [])}
+    if dimensions:
+        for d in dimensions:
+            _require_column(df, d)
+        dims = [d for d in dimensions if d not in exclude][:_MAX_AUTO_DIMENSIONS]
+    else:
+        dims = _auto_dimensions(df, exclude)
+
+    breakdowns = []
+    for dim in dims:
+        window = data.filter(pl.col("__period").cast(pl.Utf8).is_in([previous, current]))
+        grouped = (
+            window.group_by(dim, pl.col("__period").cast(pl.Utf8).alias("__p"))
+            .agg(_metric_expr(op, metric_column), pl.len().alias("rows"))
+        )
+        by_segment: dict[Any, dict[str, Any]] = {}
+        for row in grouped.to_dicts():
+            seg = by_segment.setdefault(row[dim], {"segment": row[dim]})
+            key = "current" if row["__p"] == current else "previous"
+            seg[key] = row["value"] or 0.0
+            seg[f"{key}_rows"] = row["rows"]
+        segments = []
+        for seg in by_segment.values():
+            p, c = seg.get("previous", 0.0), seg.get("current", 0.0)
+            pr, cr = seg.get("previous_rows", 0), seg.get("current_rows", 0)
+            delta = c - p
+            item: dict[str, Any] = {
+                "segment": seg["segment"],
+                "previous": _round(p),
+                "current": _round(c),
+                "change": _round(delta),
+            }
+            if op in _ADDITIVE_OPS and change != 0:
+                item["share_of_change_pct"] = _round(delta / change * 100)
+            flags = []
+            if pr == 0:
+                flags.append("new")
+            if cr == 0:
+                flags.append("dropped")
+            if max(pr, cr) < _SMALL_GROUP_ROWS:
+                flags.append("small_group")
+            if flags:
+                item["flags"] = flags
+            segments.append(item)
+        segments.sort(key=lambda s: abs(s["change"] or 0), reverse=True)
+        moved = sum(abs(s["change"] or 0) for s in segments)
+        top = segments[0] if segments else None
+        breakdowns.append(
+            {
+                "dimension": dim,
+                "segment_count": len(segments),
+                # How concentrated the movement is in the single biggest
+                # segment: a high value means this dimension "explains"
+                # the change well.
+                "top_segment_share_of_movement_pct": _round(
+                    abs(top["change"]) / moved * 100 if top and moved else None
+                ),
+                "top_contributors": segments[:top_n],
+            }
+        )
+    breakdowns.sort(key=lambda b: b["top_segment_share_of_movement_pct"] or 0, reverse=True)
+    if dims and any(
+        "small_group" in s.get("flags", []) for b in breakdowns for s in b["top_contributors"]
+    ):
+        caveats.append("Some segments have fewer than 5 rows; their changes may be noise.")
+    if not dims:
+        caveats.append(
+            "No suitable dimension (2-50 distinct text values) to break the change down by."
+        )
+
+    return {
+        "metric": {"column": metric_column, "op": op},
+        "date_column": date_column,
+        "freq": freq,
+        "previous_period": previous,
+        "current_period": current,
+        "previous_value": _round(prev_value),
+        "current_value": _round(cur_value),
+        "change": _round(change),
+        "pct_change": _round(pct),
+        "previous_rows": prev_rows,
+        "current_rows": cur_rows,
+        "dataset_rows": df.height,
+        "breakdowns": breakdowns,
+        "caveats": caveats,
+    }

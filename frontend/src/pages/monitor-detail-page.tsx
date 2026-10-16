@@ -37,11 +37,11 @@ export function MonitorDetailPage() {
   if (!monitor) {
     return (
       <div className="flex flex-col">
-        <PageHeader title="Monitor not found" />
+        <PageHeader title="Check not found" />
         <div className="px-4 py-5 sm:px-6">
           <EmptyState
             icon={History}
-            title="Monitor not found"
+            title="Check not found"
             description="It may have been removed, or belongs to a different account."
           />
         </div>
@@ -59,7 +59,7 @@ export function MonitorDetailPage() {
             <Button size="sm" variant="secondary" asChild>
               <Link to="/workspace/monitors">
                 <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-                Back to monitors
+                Back to anomaly checks
               </Link>
             </Button>
             <Button
@@ -92,8 +92,8 @@ export function MonitorDetailPage() {
               </p>
             </div>
             <div>
-              <p className="text-[var(--color-fg-subtle)]">Frequency</p>
-              <p className="text-[var(--color-fg)]">{monitor.check_frequency}</p>
+              <p className="text-[var(--color-fg-subtle)]">Runs</p>
+              <p className="text-[var(--color-fg)]">On Run now, and on each new dataset version</p>
             </div>
             <div>
               <p className="text-[var(--color-fg-subtle)]">Email alerts</p>
@@ -152,7 +152,7 @@ export function MonitorDetailPage() {
               <EmptyState
                 icon={History}
                 title="No anomalies yet"
-                description="Nothing unusual has been detected for this monitor so far."
+                description="Nothing unusual found so far. Click Run now to check the latest data."
               />
             </div>
           )}

@@ -34,6 +34,35 @@ export interface Dataset {
   duplicate_row_count: number | null
   data_quality_score: number | null
   correlations: Correlation[] | null
+  /** Current version (1 until a new file is uploaded over it). */
+  version: number
+}
+
+export interface SchemaChanges {
+  previous_version: number
+  added: string[]
+  removed: string[]
+  type_changed: { column: string; from: string; to: string }[]
+  row_count_change: number | null
+}
+
+export interface DatasetVersion {
+  version: number
+  original_filename: string
+  size_bytes: number
+  row_count: number | null
+  column_count: number | null
+  schema_changes: SchemaChanges | null
+  /** False once an old version's file has been pruned (history row kept). */
+  file_kept: boolean
+  created_at: string
+}
+
+export interface VersionUploadResult {
+  dataset: Dataset
+  version: DatasetVersion
+  checks_run: number
+  new_anomalies: number
 }
 
 export type AggregationOp = 'sum' | 'avg' | 'min' | 'max' | 'count'

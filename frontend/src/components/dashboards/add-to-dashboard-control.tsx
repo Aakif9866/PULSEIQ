@@ -5,7 +5,7 @@ import { useAddChart, useCreateDashboard, useDashboards } from '@/features/dashb
 import type { ChartType } from '@/types/dashboard'
 import type { DatasetQueryRequest } from '@/types/dataset'
 import { LayoutDashboard } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 interface AddToDashboardControlProps {
@@ -17,6 +17,8 @@ interface AddToDashboardControlProps {
    * silently. Defaults to "bar" when the caller has no suggestion (e.g.
    * a manually-built query in the dataset explorer). */
   suggestedChartType?: ChartType
+  /** Links the chart back to the saved insight it came from. */
+  insightId?: string
 }
 
 const NEW_DASHBOARD = '__new__'
@@ -29,7 +31,9 @@ export function AddToDashboardControl({
   query,
   defaultTitle,
   suggestedChartType,
+  insightId,
 }: AddToDashboardControlProps) {
+  const id = useId()
   const { data: dashboards } = useDashboards()
   const createDashboard = useCreateDashboard()
   const addChart = useAddChart()
@@ -50,7 +54,7 @@ export function AddToDashboardControl({
     if (!targetDashboardId) return
 
     addChart.mutate(
-      { dashboardId: targetDashboardId, datasetId, title, chartType, query },
+      { dashboardId: targetDashboardId, datasetId, title, chartType, query, insightId },
       { onSuccess: () => setOpen(false) },
     )
   }
@@ -67,8 +71,8 @@ export function AddToDashboardControl({
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-md border border-[var(--color-border)] p-3">
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--color-fg-muted)]">Dashboard</label>
-        <Select value={dashboardId} onChange={(e) => setDashboardId(e.target.value)}>
+        <label htmlFor={`${id}-0`} className="text-xs font-medium text-[var(--color-fg-muted)]">Dashboard</label>
+        <Select id={`${id}-0`} value={dashboardId} onChange={(e) => setDashboardId(e.target.value)}>
           <option value="">Select…</option>
           {dashboards?.map((d) => (
             <option key={d.id} value={d.id}>
@@ -80,17 +84,17 @@ export function AddToDashboardControl({
       </div>
       {dashboardId === NEW_DASHBOARD && (
         <div className="space-y-1.5">
-          <label className="text-xs font-medium text-[var(--color-fg-muted)]">Dashboard name</label>
-          <Input value={newDashboardName} onChange={(e) => setNewDashboardName(e.target.value)} />
+          <label htmlFor={`${id}-1`} className="text-xs font-medium text-[var(--color-fg-muted)]">Dashboard name</label>
+          <Input id={`${id}-1`} value={newDashboardName} onChange={(e) => setNewDashboardName(e.target.value)} />
         </div>
       )}
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--color-fg-muted)]">Chart title</label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+        <label htmlFor={`${id}-2`} className="text-xs font-medium text-[var(--color-fg-muted)]">Chart title</label>
+        <Input id={`${id}-2`} value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-[var(--color-fg-muted)]">Chart type</label>
-        <Select value={chartType} onChange={(e) => setChartType(e.target.value as ChartType)}>
+        <label htmlFor={`${id}-3`} className="text-xs font-medium text-[var(--color-fg-muted)]">Chart type</label>
+        <Select id={`${id}-3`} value={chartType} onChange={(e) => setChartType(e.target.value as ChartType)}>
           <option value="bar">Bar</option>
           <option value="line">Line</option>
           <option value="area">Area</option>

@@ -6,12 +6,12 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
-import { useDataset, useDatasets } from '@/features/datasets/api'
+import { useDataset, useDatasets, useStorageMode } from '@/features/datasets/api'
 import { useCreateMonitor, useDeleteMonitor, useMonitors, useRunMonitor } from '@/features/monitors/api'
 import { ApiError } from '@/lib/api-client'
 import { formatDate } from '@/lib/utils'
 import type { AggregationOp } from '@/types/dataset'
-import type { BaselineStrategy, CheckFrequency, MonitorStatus } from '@/types/monitor'
+import type { BaselineStrategy, MonitorStatus } from '@/types/monitor'
 import { Plus, Radar, Trash2 } from 'lucide-react'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -50,8 +50,8 @@ export function MonitorsPage() {
   const [baselineStrategy, setBaselineStrategy] = useState<BaselineStrategy>('moving_average')
   const [thresholdPercent, setThresholdPercent] = useState('20')
   const [zscoreThreshold, setZscoreThreshold] = useState('3')
-  const [checkFrequency, setCheckFrequency] = useState<CheckFrequency>('daily')
   const [notifyEmail, setNotifyEmail] = useState(false)
+  const emailEnabled = useStorageMode().data?.email_alerts_enabled ?? false
 
   const { data: selectedDataset } = useDataset(datasetId)
   const columnNames = useMemo(
@@ -72,7 +72,6 @@ export function MonitorsPage() {
     setBaselineStrategy('moving_average')
     setThresholdPercent('20')
     setZscoreThreshold('3')
-    setCheckFrequency('daily')
     setNotifyEmail(false)
     setFormError(null)
   }
@@ -93,7 +92,9 @@ export function MonitorsPage() {
         baseline_strategy: baselineStrategy,
         threshold_percent: baselineStrategy === 'zscore' ? null : Number(thresholdPercent),
         zscore_threshold: baselineStrategy === 'zscore' ? Number(zscoreThreshold) : null,
-        check_frequency: checkFrequency,
+        // Uploaded files never change and no scheduler runs in production,
+        // so a check only ever runs when the user clicks Run.
+        check_frequency: 'manual',
         notify_email: notifyEmail,
       },
       {
@@ -102,7 +103,7 @@ export function MonitorsPage() {
           setCreating(false)
         },
         onError: (err) => {
-          setFormError(err instanceof ApiError ? err.message : 'Could not create the monitor.')
+          setFormError(err instanceof ApiError ? err.message : 'Could not create the check.')
         },
       },
     )
@@ -111,13 +112,13 @@ export function MonitorsPage() {
   return (
     <div className="flex flex-col">
       <PageHeader
-        title="Monitors"
-        description="Watch a metric and get alerted when it moves unexpectedly."
+        title="Anomaly checks"
+        description="Find unusual periods in a metric across your dataset's history."
         actions={
           !creating && (
             <Button size="sm" onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" strokeWidth={1.75} />
-              New monitor
+              New check
             </Button>
           )
         }
@@ -152,7 +153,7 @@ export function MonitorsPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="monitor-monitor-name">Monitor name</Label>
+                <Label htmlFor="monitor-monitor-name">Check name</Label>
                 <Input
                   id="monitor-monitor-name"
                   value={name}
@@ -249,20 +250,16 @@ export function MonitorsPage() {
                   />
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label htmlFor="monitor-check-frequency">Check frequency</Label>
-                <Select
-                  id="monitor-check-frequency"
-                  value={checkFrequency}
-                  onChange={(e) => setCheckFrequency(e.target.value as CheckFrequency)}
-                >
-                  <option value="manual">Manual only</option>
-                  <option value="daily">Daily</option>
-                  <option value="hourly">Hourly</option>
-                </Select>
-              </div>
             </div>
 
+            <p className="text-xs text-[var(--color-fg-muted)]">
+              A check compares the latest period with the ones before it, across the history in
+              your file. It runs when you click <strong className="font-medium">Run</strong>, and
+              again automatically whenever you upload a new version of the dataset. Periods already
+              reported are never reported twice.
+            </p>
+
+            {emailEnabled && (
             <label className="flex items-center gap-2 text-xs text-[var(--color-fg-muted)]">
               <input
                 type="checkbox"
@@ -272,10 +269,11 @@ export function MonitorsPage() {
               />
               Email me when an anomaly is detected
             </label>
+            )}
 
             <div className="flex gap-2">
               <Button type="submit" size="sm" disabled={!canSubmit || createMonitor.isPending}>
-                {createMonitor.isPending ? 'Creating…' : 'Create monitor'}
+                {createMonitor.isPending ? 'Creating…' : 'Create check'}
               </Button>
               <Button
                 type="button"
@@ -295,12 +293,12 @@ export function MonitorsPage() {
         {!isLoading && monitors?.length === 0 && !creating && (
           <EmptyState
             icon={Radar}
-            title="No monitors yet"
-            description="Create a monitor to watch a metric and get alerted when it moves unexpectedly."
+            title="No anomaly checks yet"
+            description="Pick a metric and a time column, and PulseIQ flags periods that break from the trend, then explains them."
             action={
               <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>
                 <Plus className="h-4 w-4" strokeWidth={1.75} />
-                New monitor
+                New check
               </Button>
             }
           />

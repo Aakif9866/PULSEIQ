@@ -40,6 +40,8 @@ export class ApiError extends Error {
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown
   auth?: boolean
+  /** 'text' for non-JSON responses (e.g. the HTML report). */
+  as?: 'json' | 'text'
 }
 
 // One refresh at a time: concurrent 401s all wait on the same attempt,
@@ -73,7 +75,7 @@ function refreshSession(): Promise<boolean> {
 
 async function request<T>(
   path: string,
-  { body, auth = true, headers, ...init }: RequestOptions = {},
+  { body, auth = true, headers, as = 'json', ...init }: RequestOptions = {},
   retried = false,
 ): Promise<T> {
   const token = auth ? useAuthStore.getState().accessToken : null
@@ -95,7 +97,7 @@ async function request<T>(
 
   if (response.status === 401 && auth) {
     if (!retried && (await refreshSession())) {
-      return request<T>(path, { body, auth, headers, ...init }, true)
+      return request<T>(path, { body, auth, headers, as, ...init }, true)
     }
     useAuthStore.getState().clearSession()
   }
@@ -123,11 +125,12 @@ async function request<T>(
     return undefined as T
   }
 
-  return (await response.json()) as T
+  return (as === 'text' ? await response.text() : await response.json()) as T
 }
 
 export const apiClient = {
   get: <T>(path: string, options?: RequestOptions) => request<T>(path, { ...options, method: 'GET' }),
+  getText: (path: string) => request<string>(path, { method: 'GET', as: 'text' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>

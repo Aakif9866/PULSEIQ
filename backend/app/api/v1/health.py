@@ -10,7 +10,7 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health_check() -> dict[str, str | int]:
+def health_check() -> dict[str, str | int | bool]:
     # storage_provider is non-sensitive (just "local"/"r2", never
     # credentials) — exposed so the frontend can show an accurate note
     # about dataset persistence instead of a hardcoded assumption. The
@@ -20,6 +20,8 @@ def health_check() -> dict[str, str | int]:
         "storage_provider": settings.STORAGE_PROVIDER,
         "max_upload_size_mb": settings.MAX_UPLOAD_SIZE_MB,
         "max_datasets_per_user": settings.MAX_DATASETS_PER_USER,
+        # So the UI only offers email alerts when they can actually be sent.
+        "email_alerts_enabled": bool(settings.SMTP_HOST),
     }
 
 

@@ -44,6 +44,8 @@ export interface ToolCallRecord {
 export interface ConversationTurn {
   question: string
   answer: string
+  /** Tools + arguments the answer used (see analysisContext). */
+  context?: string
 }
 
 export interface AnalyzeRequest {
@@ -58,7 +60,10 @@ export interface AnalyzeResponse {
   tool_calls: ToolCallRecord[]
   needs_clarification: string | null
   status: 'ok' | 'degraded'
+  /** Set only when degraded, e.g. 'rate_limited', 'unreachable', 'auth'. */
+  failure_reason?: string | null
   warnings: string[]
+  suggested_questions?: string[]
 }
 
 /** A tool_calls[].result carrying an "error" key is how app.ai.tool_specs
@@ -112,4 +117,22 @@ export function chartOptionsFromToolCalls(calls: ToolCallRecord[], question = ''
   return options
     .sort((a, b) => b.score - a.score || b.order - a.order)
     .map(({ label, query }) => ({ label, query }))
+}
+
+/** What an answer computed, as compact text for the next turn's context:
+ * tool names + arguments only (metric, dimensions, periods), never result
+ * values, so the model recomputes rather than trusting earlier claims.
+ * Capped to match the server's limit. */
+export function analysisContext(calls: ToolCallRecord[]): string {
+  return calls
+    .filter((c) => !toolCallFailed(c))
+    .map((c) => {
+      const args = Object.entries(c.arguments)
+        .filter(([, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+        .join(', ')
+      return `${c.tool}(${args})`
+    })
+    .join('; ')
+    .slice(0, 1000)
 }

@@ -242,3 +242,52 @@ def test_no_delay_after_the_final_attempt_before_giving_up(monkeypatch):
     # 3 attempts (_MAX_RETRIES=2 -> 3 total) means 2 delays, not 3 — no
     # point sleeping after the attempt that's about to give up anyway.
     assert len(sleeps) == 2
+
+
+def _sdk_error(cls, status: int):
+    """A real groq SDK exception instance (its constructor needs an httpx
+    response, which these tests don't otherwise make)."""
+    import httpx
+
+    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+    return cls("boom", response=httpx.Response(status, request=request), body=None)
+
+
+@pytest.mark.parametrize(
+    ("cls_name", "status", "reason"),
+    [
+        ("AuthenticationError", 401, "auth"),
+        ("NotFoundError", 404, "model_unavailable"),
+        ("BadRequestError", 400, "bad_request"),
+    ],
+)
+def test_configuration_errors_fail_fast_without_retrying(monkeypatch, cls_name, status, reason):
+    import groq
+
+    fake = _install_fake_client(monkeypatch, [_sdk_error(getattr(groq, cls_name), status)] * 3)
+    with pytest.raises(AiResponseError) as caught:
+        GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert caught.value.reason == reason
+    assert len(fake.chat.completions.received_kwargs) == 1  # never succeeds on retry
+
+
+def test_rate_limit_is_retried_and_reported_as_such(monkeypatch):
+    import groq
+
+    fake = _install_fake_client(monkeypatch, [_sdk_error(groq.RateLimitError, 429)] * 3)
+    with pytest.raises(AiResponseError) as caught:
+        GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert caught.value.reason == "rate_limited"
+    assert len(fake.chat.completions.received_kwargs) == 3
+
+
+def test_connection_error_is_retried_and_reported_as_unreachable(monkeypatch):
+    import groq
+    import httpx
+
+    err = groq.APIConnectionError(request=httpx.Request("POST", "https://api.groq.com"))
+    fake = _install_fake_client(monkeypatch, [err, err, err])
+    with pytest.raises(AiResponseError) as caught:
+        GroqProvider().chat(messages=[{"role": "user", "content": "hi"}])
+    assert caught.value.reason == "unreachable"
+    assert len(fake.chat.completions.received_kwargs) == 3

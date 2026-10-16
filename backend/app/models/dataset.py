@@ -39,6 +39,8 @@ class Dataset(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     duplicate_row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     data_quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     correlations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # Current version number (v3 versioning; history in dataset_versions).
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"Dataset(id={self.id}, original_filename={self.original_filename!r})"

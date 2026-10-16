@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api-client'
-import type { Dataset, DatasetQueryRequest, DatasetQueryResult } from '@/types/dataset'
+import type { Dataset, DatasetQueryRequest, DatasetQueryResult, DatasetVersion, VersionUploadResult } from '@/types/dataset'
+import type { DatasetBriefing } from '@/types/briefing'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 const DATASETS_KEY = ['datasets'] as const
@@ -20,6 +21,16 @@ export function useDataset(id: string) {
   })
 }
 
+/** Deterministic overview + suggested questions (no AI quota). */
+export function useDatasetBriefing(id: string, enabled = true) {
+  return useQuery({
+    queryKey: ['dataset-briefing', id],
+    queryFn: () => apiClient.get<DatasetBriefing>(`/datasets/${id}/briefing`),
+    enabled: Boolean(id) && enabled,
+    staleTime: 5 * 60_000, // a dataset's contents never change after upload
+  })
+}
+
 export function useUploadDataset() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -30,6 +41,34 @@ export function useUploadDataset() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: DATASETS_KEY })
+    },
+  })
+}
+
+export function useDatasetVersions(id: string) {
+  return useQuery({
+    queryKey: ['dataset-versions', id],
+    queryFn: () => apiClient.get<DatasetVersion[]>(`/datasets/${id}/versions`),
+    enabled: Boolean(id),
+  })
+}
+
+/** Uploads a new file over a dataset. Everything computed from the old
+ * data (briefing, queries, insights' staleness, checks) refreshes. */
+export function useUploadVersion(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData()
+      formData.append('file', file)
+      return apiClient.upload<VersionUploadResult>(`/datasets/${id}/versions`, formData)
+    },
+    onSuccess: () => {
+      // DATASETS_KEY also covers this dataset's cached query results.
+      for (const key of [DATASETS_KEY, ['dataset-briefing', id], ['dataset-versions', id],
+        ['insights'], ['monitors']]) {
+        queryClient.invalidateQueries({ queryKey: key })
+      }
     },
   })
 }
@@ -55,6 +94,7 @@ export function useStorageMode() {
         storage_provider: 'local' | 'r2'
         max_upload_size_mb: number
         max_datasets_per_user: number
+        email_alerts_enabled: boolean
       }>('/health', {
         auth: false,
       }),

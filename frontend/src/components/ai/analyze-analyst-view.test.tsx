@@ -32,6 +32,7 @@ const PROFILED_DATASET: Dataset = {
   duplicate_row_count: 2,
   data_quality_score: 90,
   correlations: null,
+  version: 1,
 }
 
 function renderWithProviders() {
@@ -282,7 +283,15 @@ describe('AnalyzeAnalystView', () => {
       query: undefined,
       row_count: undefined,
       findings: response.findings,
+      title: undefined,
+      tool_calls: [], // the evidence is stored with the insight
     })
+    // Once saved, the report and the saved insight are one click away.
+    expect(await screen.findByRole('button', { name: /download report/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /view saved insight/i })).toHaveAttribute(
+      'href',
+      '/workspace/insights?focus=ins-1',
+    )
     expect(await screen.findByRole('button', { name: /saved/i })).toBeDisabled()
   })
 
@@ -313,7 +322,7 @@ describe('AnalyzeAnalystView', () => {
       ],
     })
     await user.type(screen.getByRole('textbox'), ' again')
-    await user.click(screen.getByRole('button', { name: /^ask$/i }))
+    await user.click(screen.getByRole('button', { name: /^ask follow-up$/i }))
     expect(await screen.findByRole('button', { name: /add to dashboard/i })).toBeInTheDocument()
     // One chartable result: nothing to choose between.
     expect(screen.queryByRole('combobox', { name: /result to chart/i })).not.toBeInTheDocument()
@@ -343,5 +352,21 @@ describe('AnalyzeAnalystView', () => {
     await askQuestion('q')
     await screen.findByText(/analysis could not be completed/i)
     expect(screen.queryByRole('button', { name: /save insight/i })).not.toBeInTheDocument()
+  })
+
+  it('fills (but does not send) a suggested next question, and keeps the thread', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      question: 'Revenue by region?', answer: 'North leads.', status: 'ok',
+      needs_clarification: null, warnings: [], findings: [], tool_calls: [],
+      suggested_questions: ['Break revenue down by channel.'],
+    })
+    renderWithProviders()
+    const user = await askQuestion('Revenue by region?')
+    await user.click(await screen.findByRole('button', { name: /break revenue down by channel/i }))
+
+    expect(screen.getByRole('textbox')).toHaveValue('Break revenue down by channel.')
+    expect(apiClient.post).toHaveBeenCalledTimes(1) // picking never spends quota
+    expect(screen.getByRole('button', { name: /ask follow-up/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /new conversation/i })).toBeInTheDocument()
   })
 })

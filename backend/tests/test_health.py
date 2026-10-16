@@ -29,3 +29,12 @@ def test_every_response_carries_a_request_id():
     with TestClient(app) as client:
         other = client.get("/api/v1/health")
     assert other.headers.get("x-request-id") != request_id
+
+
+def test_health_reports_whether_email_alerts_can_be_sent(client, monkeypatch):
+    from app.core.config import settings
+
+    monkeypatch.setattr(settings, "SMTP_HOST", None)
+    assert client.get("/api/v1/health").json()["email_alerts_enabled"] is False
+    monkeypatch.setattr(settings, "SMTP_HOST", "smtp.example.com")
+    assert client.get("/api/v1/health").json()["email_alerts_enabled"] is True

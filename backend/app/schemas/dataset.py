@@ -32,6 +32,7 @@ class Correlation(BaseModel):
 class DatasetRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    version: int = 1
     id: UUID
     original_filename: str
     content_type: str
@@ -48,3 +49,32 @@ class DatasetRead(BaseModel):
     duplicate_row_count: int | None = None
     data_quality_score: float | None = None
     correlations: list[Correlation] | None = None
+
+
+class SchemaChanges(BaseModel):
+    previous_version: int
+    added: list[str] = []
+    removed: list[str] = []
+    type_changed: list[dict[str, str]] = []
+    row_count_change: int | None = None
+
+
+class DatasetVersionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    version: int
+    original_filename: str
+    size_bytes: int
+    row_count: int | None
+    column_count: int | None
+    schema_changes: SchemaChanges | None
+    file_kept: bool
+    created_at: datetime
+
+
+class VersionUploadResult(BaseModel):
+    dataset: "DatasetRead"
+    version: DatasetVersionRead
+    # Anomaly checks on this dataset re-run against the new data.
+    checks_run: int
+    new_anomalies: int

@@ -3,6 +3,7 @@ autogenerate and for create_all() in tests.
 """
 from app.models.dashboard import Dashboard, DashboardChart
 from app.models.dataset import Dataset
+from app.models.dataset_version import DatasetVersion
 from app.models.history import QueryHistory, SavedQuery
 from app.models.insight import Insight
 from app.models.monitor import Anomaly, Monitor
@@ -16,6 +17,7 @@ __all__ = [
     "Dashboard",
     "DashboardChart",
     "Dataset",
+    "DatasetVersion",
     "Insight",
     "Monitor",
     "QueryHistory",

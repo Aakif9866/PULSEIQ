@@ -5,7 +5,9 @@ import { useDatasetQueryResult } from '@/features/datasets/api'
 import { buildChartOption } from '@/lib/chart-options'
 import { useTheme } from '@/lib/theme'
 import type { DashboardChart } from '@/types/dashboard'
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, Lightbulb, Pencil, Trash2, X } from 'lucide-react'
+import { type FormEvent, useState } from 'react'
+import { Link } from 'react-router-dom'
 import ReactECharts from 'echarts-for-react'
 
 interface ChartCardProps {
@@ -13,11 +15,28 @@ interface ChartCardProps {
   onMoveUp: () => void
   onMoveDown: () => void
   onDelete: () => void
+  onRename: (title: string) => void
   isFirst: boolean
   isLast: boolean
 }
 
-export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLast }: ChartCardProps) {
+export function ChartCard({
+  chart,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+  onRename,
+  isFirst,
+  isLast,
+}: ChartCardProps) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(chart.title)
+  const submitTitle = (e: FormEvent) => {
+    e.preventDefault()
+    const next = title.trim()
+    if (next && next !== chart.title) onRename(next)
+    setEditing(false)
+  }
   const theme = useTheme()
   const { data: result, isLoading, isError } = useDatasetQueryResult(
     chart.dataset_id,
@@ -27,9 +46,53 @@ export function ChartCard({ chart, onMoveUp, onMoveDown, onDelete, isFirst, isLa
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between">
-        <div>
-          <CardTitle>{chart.title}</CardTitle>
-          <p className="mt-0.5 text-xs text-[var(--color-fg-subtle)]">{chart.dataset_filename}</p>
+        <div className="min-w-0 flex-1">
+          {editing ? (
+            <form onSubmit={submitTitle} className="flex items-center gap-1">
+              <input
+                autoFocus
+                aria-label="Chart title"
+                value={title}
+                maxLength={255}
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
+                className="h-7 min-w-0 flex-1 rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-2 text-sm outline-none focus-visible:border-[var(--color-accent)] focus-visible:ring-4 focus-visible:ring-[var(--color-focus)]"
+              />
+              <button type="submit" aria-label="Save title" className="rounded-md p-1.5 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)]">
+                <Check className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
+              <button type="button" aria-label="Cancel" onClick={() => setEditing(false)} className="rounded-md p-1.5 text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-raised)]">
+                <X className="h-3.5 w-3.5" strokeWidth={2} />
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-1">
+              <CardTitle className="truncate">{chart.title}</CardTitle>
+              <button
+                type="button"
+                onClick={() => {
+                  setTitle(chart.title)
+                  setEditing(true)
+                }}
+                aria-label="Rename chart"
+                className="rounded-md p-1 text-[var(--color-fg-subtle)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-fg)]"
+              >
+                <Pencil className="h-3 w-3" strokeWidth={2} />
+              </button>
+            </div>
+          )}
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[var(--color-fg-subtle)]">
+            {chart.dataset_filename}
+            {chart.insight_id && (
+              <Link
+                to={`/workspace/insights?focus=${chart.insight_id}`}
+                className="inline-flex items-center gap-1 text-[var(--color-accent)] hover:underline"
+              >
+                <Lightbulb className="h-3 w-3" strokeWidth={2} />
+                View insight
+              </Link>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-1">
           <button

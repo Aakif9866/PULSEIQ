@@ -3,13 +3,20 @@ from typing import cast
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError
+from app.core.exceptions import (
+    ChartNotFoundError,
+    DashboardNotFoundError,
+    DatasetNotFoundError,
+    InsightNotFoundError,
+)
 from app.models.dashboard import Dashboard
 from app.repositories.dashboard_chart_repository import DashboardChartRepository
 from app.repositories.dashboard_repository import DashboardRepository
 from app.repositories.dataset_repository import DatasetRepository
+from app.repositories.insight_repository import InsightRepository
 from app.schemas.dashboard import (
     ChartType,
+    ChartUpdate,
     DashboardChartCreate,
     DashboardChartRead,
     DashboardDetail,
@@ -23,6 +30,7 @@ class DashboardService:
         self._dashboards = DashboardRepository(db)
         self._charts = DashboardChartRepository(db)
         self._datasets = DatasetRepository(db)
+        self._insights = InsightRepository(db)
 
     def create(self, owner_id: uuid.UUID, name: str) -> DashboardRead:
         dashboard = self._dashboards.create(owner_id=owner_id, name=name)
@@ -46,6 +54,7 @@ class DashboardService:
                 title=chart.title,
                 chart_type=cast(ChartType, chart.chart_type),
                 query_request=DatasetQueryRequest.model_validate(chart.query_request),
+                insight_id=chart.insight_id,
                 position=chart.position,
                 created_at=chart.created_at,
             )
@@ -68,6 +77,11 @@ class DashboardService:
         dataset = self._datasets.get_owned(payload.dataset_id, owner_id)
         if dataset is None:
             raise DatasetNotFoundError(payload.dataset_id)
+        # Same for the insight link: it must be this user's, on this dataset.
+        if payload.insight_id is not None:
+            insight = self._insights.get_owned(payload.insight_id, owner_id)
+            if insight is None or insight.dataset_id != payload.dataset_id:
+                raise InsightNotFoundError(payload.insight_id)
 
         chart = self._charts.create(
             dashboard_id=dashboard_id,
@@ -75,6 +89,7 @@ class DashboardService:
             title=payload.title,
             chart_type=payload.chart_type,
             query_request=payload.query.model_dump(),
+            insight_id=payload.insight_id,
         )
         return DashboardChartRead(
             id=chart.id,
@@ -83,9 +98,23 @@ class DashboardService:
             title=chart.title,
             chart_type=payload.chart_type,
             query_request=payload.query,
+            insight_id=chart.insight_id,
             position=chart.position,
             created_at=chart.created_at,
         )
+
+    def rename_chart(
+        self,
+        dashboard_id: uuid.UUID,
+        owner_id: uuid.UUID,
+        chart_id: uuid.UUID,
+        payload: ChartUpdate,
+    ) -> None:
+        self._get_owned_dashboard(dashboard_id, owner_id)
+        chart = self._charts.get(chart_id, dashboard_id)
+        if chart is None:
+            raise ChartNotFoundError(chart_id)
+        self._charts.rename(chart, payload.title.strip())
 
     def delete_chart(
         self, dashboard_id: uuid.UUID, owner_id: uuid.UUID, chart_id: uuid.UUID

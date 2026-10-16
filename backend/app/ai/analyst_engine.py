@@ -20,6 +20,7 @@ from opentelemetry.trace import Status, StatusCode
 from pydantic import ValidationError
 
 from app.ai.answer_validator import validate_findings
+from app.ai.follow_ups import suggest_follow_ups
 from app.ai.guardrails import DATA_NOT_INSTRUCTIONS
 from app.ai.providers.base import AIProvider
 from app.ai.tool_specs import TOOL_SPECS, call_tool
@@ -73,6 +74,13 @@ already received in this conversation — never a guess.
 - Distinguish a statistical_outlier (an extreme but possibly legitimate value) from a \
 logical_violation (outside a documented/common-sense range) — never call every unusual value \
 an error.
+- For "why did X change", "what drove it", or "compare period A vs B", call explain_change. \
+Report the overall change first, then the top contributing segments with their share of the \
+change. Contribution is not causation: say a segment "accounted for" a change, never that it \
+"caused" it. Repeat any caveats it returns that matter to the answer.
+- Earlier turns are context, not verified facts. For a follow-up ("break that down by region", \
+"compare it with the previous month"), reuse the metric, filters and period from the earlier \
+turn's "[Computed for this answer: ...]" note, but call the tools again for every number.
 - Never state a root cause as settled fact. Use "may indicate", "a possible explanation is", or \
 "this would require further verification" for anything the data doesn't directly prove.
 - If a question needs a column that doesn't exist in this dataset, say so plainly in "answer" \
@@ -92,6 +100,21 @@ _FALLBACK_MESSAGE = (
     "response. Your dataset was loaded successfully and the computations that did run are "
     "shown below. Please retry."
 )
+
+_AFTER = " Your dataset is fine, and any computations that did run are shown below."
+# What users see per AiResponseError.reason. Configuration problems are
+# named as such (so nobody retries forever), without saying which secret.
+_FAILURE_MESSAGES = {
+    "rate_limited": "The AI service is busy right now (rate limit reached). "
+    "Please try again in a minute." + _AFTER,
+    "timeout": "The AI service took too long to respond. Please try again." + _AFTER,
+    "unreachable": "The AI service couldn't be reached. This is usually temporary; "
+    "please try again shortly." + _AFTER,
+    "auth": "AI analysis is unavailable because of a server configuration problem, "
+    "not anything about your data. Retrying won't help until it's fixed." + _AFTER,
+    "model_unavailable": "AI analysis is unavailable because the configured AI model "
+    "can't be used right now (server configuration)." + _AFTER,
+}
 
 
 def _traced_tool_call(name: str, df: pl.DataFrame, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -172,7 +195,10 @@ def run_analysis(
     ]
     for turn in (conversation_history or [])[-_MAX_HISTORY_TURNS:]:
         messages.append({"role": "user", "content": turn.question})
-        messages.append({"role": "assistant", "content": turn.answer})
+        answer = turn.answer
+        if turn.context:
+            answer += f"\n\n[Computed for this answer: {turn.context}]"
+        messages.append({"role": "assistant", "content": answer})
     messages.append({"role": "user", "content": question})
 
     tool_records: list[ToolCallRecord] = []
@@ -200,8 +226,8 @@ def run_analysis(
         # could not be completed" instead of the designed degraded answer.
         try:
             message = provider.chat(messages=messages, tools=TOOL_SPECS, temperature=0.1)
-        except AiResponseError:
-            return _fallback_response(question, tool_records)
+        except AiResponseError as exc:
+            return _fallback_response(question, tool_records, exc.reason)
 
         if not message.tool_calls:
             tools_exhausted = False
@@ -249,8 +275,8 @@ def run_analysis(
         messages.append({"role": "user", "content": _FINAL_JSON_NUDGE})
         try:
             final = provider.chat(messages=messages, json_mode=True, temperature=0.1)
-        except AiResponseError:
-            return _fallback_response(question, tool_records)
+        except AiResponseError as exc:
+            return _fallback_response(question, tool_records, exc.reason)
         parsed = _parse_final_answer(final.content or "")
 
     if parsed is None:
@@ -267,18 +293,32 @@ def run_analysis(
         needs_clarification=parsed.get("needs_clarification"),
         status="ok" if parsed.get("answer") else "degraded",
         warnings=warnings,
+        suggested_questions=_safe_follow_ups(df, question, tool_records),
     )
 
 
-def _fallback_response(question: str, tool_records: list[ToolCallRecord]) -> AnalyzeResponse:
+def _safe_follow_ups(df: pl.DataFrame, question: str, tools: list[ToolCallRecord]) -> list[str]:
+    # Suggestions are a convenience: never let them break a real answer.
+    try:
+        return suggest_follow_ups(df, question, tools)
+    except Exception:  # noqa: BLE001
+        logger.warning("follow_up_suggestions_failed", exc_info=True)
+        return []
+
+
+def _fallback_response(
+    question: str, tool_records: list[ToolCallRecord], reason: str = "invalid_response"
+) -> AnalyzeResponse:
     logger.error(
-        "analysis_fallback_triggered", question=question, tool_call_count=len(tool_records)
+        "analysis_fallback_triggered",
+        question=question, tool_call_count=len(tool_records), reason=reason,
     )
     return AnalyzeResponse(
         question=question,
-        answer=_FALLBACK_MESSAGE,
+        answer=_FAILURE_MESSAGES.get(reason, _FALLBACK_MESSAGE),
         findings=[],
         tool_calls=tool_records,
         status="degraded",
+        failure_reason=reason,
         warnings=["The AI provider did not return a usable final answer."],
     )

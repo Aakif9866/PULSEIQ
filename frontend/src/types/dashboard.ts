@@ -16,6 +16,8 @@ export interface DashboardChart {
   title: string
   chart_type: ChartType
   query_request: DatasetQueryRequest
+  /** The saved insight this chart came from, if any. */
+  insight_id: string | null
   position: number
   created_at: string
 }

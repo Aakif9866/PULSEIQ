@@ -7,14 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { AddToDashboardControl } from '@/components/dashboards/add-to-dashboard-control'
 import { useAnalyzeDataset } from '@/features/ai/api'
-import { useSaveInsight } from '@/features/insights/api'
-import { useDatasets } from '@/features/datasets/api'
+import { downloadInsightReport, useSaveInsight } from '@/features/insights/api'
+import { useDatasetBriefing, useDatasets } from '@/features/datasets/api'
 import { ApiError } from '@/lib/api-client'
 import type { AnalyzeResponse, ConversationTurn, Finding, ToolCallRecord } from '@/types/analysis'
-import { chartOptionsFromToolCalls, toolCallFailed } from '@/types/analysis'
-import { AlertTriangle, Bookmark, Check, CheckCircle2, Database, HelpCircle, Sparkles, Wrench } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { analysisContext, chartOptionsFromToolCalls, toolCallFailed } from '@/types/analysis'
+import { AlertTriangle, Bookmark, Check, CheckCircle2, Database, FileDown, HelpCircle, MessageSquarePlus, Sparkles, Wrench } from 'lucide-react'
+import { type FormEvent, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 const CONFIDENCE_LABEL: Record<Finding['confidence'], string> = {
   high: 'High confidence',
@@ -102,8 +102,12 @@ function EvidencePanel({ response }: { response: AnalyzeResponse }) {
             strokeWidth={1.75}
           />
           <p>
-            This analysis couldn't be completed reliably — the AI provider didn't return a
-            usable response after retrying. Try rephrasing the question or asking again.
+            {/* Rephrasing only helps when the model's reply was unusable —
+                not for a rate limit, an outage or a server misconfiguration,
+                whose specific explanation is the answer text below. */}
+            {!response.failure_reason || response.failure_reason === 'invalid_response'
+              ? "This analysis couldn't be completed reliably — the AI provider didn't return a usable response after retrying. Try rephrasing the question or asking again."
+              : "This analysis couldn't be completed. The reason is explained below."}
           </p>
         </div>
       )}
@@ -168,6 +172,36 @@ function EvidencePanel({ response }: { response: AnalyzeResponse }) {
   )
 }
 
+function QuestionChips({
+  label,
+  questions,
+  onPick,
+}: {
+  label: string
+  questions: string[]
+  onPick: (q: string) => void
+}) {
+  if (questions.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-[var(--color-fg-muted)]">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {questions.map((q) => (
+          <button
+            key={q}
+            type="button"
+            onClick={() => onPick(q)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border-strong)] px-3 py-1.5 text-left text-xs text-[var(--color-fg)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[var(--color-focus)] active:scale-[0.98]"
+          >
+            <Sparkles className="h-3 w-3 shrink-0 text-[var(--color-purple)]" strokeWidth={2} />
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Save / add-to-dashboard for one answer. Keyed by the answer, so a new
  * question starts with fresh "Save insight" state. */
 function AnswerActions({ datasetId, response }: { datasetId: string; response: AnalyzeResponse }) {
@@ -191,6 +225,7 @@ function AnswerActions({ datasetId, response }: { datasetId: string; response: A
             question: response.question,
             answer: response.answer,
             findings: response.findings,
+            toolCalls: response.tool_calls,
           })
         }
       >
@@ -201,13 +236,19 @@ function AnswerActions({ datasetId, response }: { datasetId: string; response: A
         )}
         {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : 'Save insight'}
       </Button>
-      {save.isSuccess && (
-        <Link
-          to="/workspace/insights"
-          className="self-center text-xs font-medium text-[var(--color-accent)] hover:underline"
-        >
-          View saved insights
-        </Link>
+      {save.data && (
+        <>
+          <Button size="sm" variant="secondary" onClick={() => downloadInsightReport(save.data)}>
+            <FileDown className="h-4 w-4" strokeWidth={1.75} />
+            Download report
+          </Button>
+          <Link
+            to={`/workspace/insights?focus=${save.data.id}`}
+            className="self-center text-xs font-medium text-[var(--color-accent)] hover:underline"
+          >
+            View saved insight
+          </Link>
+        </>
       )}
       {chart && (
         <div className="flex flex-wrap items-start gap-2">
@@ -231,6 +272,7 @@ function AnswerActions({ datasetId, response }: { datasetId: string; response: A
             query={chart.query}
             defaultTitle={response.question.slice(0, 255)}
             suggestedChartType={chart.query.group_by?.length ? 'bar' : 'kpi'}
+            insightId={save.data?.id}
           />
         </div>
       )}
@@ -248,13 +290,27 @@ export function AnalyzeAnalystView() {
   const { data: datasets } = useDatasets()
   const readyDatasets = datasets?.filter((d) => d.status === 'profiled') ?? []
 
-  const [datasetId, setDatasetId] = useState('')
-  const [question, setQuestion] = useState('')
+  // Deep links from a dataset's briefing pre-fill (never auto-send) a
+  // question, so following a link never spends AI quota on its own.
+  const [params] = useSearchParams()
+  const [datasetId, setDatasetId] = useState(params.get('dataset') ?? '')
+  const [question, setQuestion] = useState(params.get('q') ?? '')
   const [history, setHistory] = useState<ConversationTurn[]>([])
   const [lastResponse, setLastResponse] = useState<AnalyzeResponse | null>(null)
   const [answerCount, setAnswerCount] = useState(0)
 
   const analyze = useAnalyzeDataset(datasetId)
+  const briefing = useDatasetBriefing(datasetId, history.length === 0)
+  const questionRef = useRef<HTMLInputElement>(null)
+  // Fills (never sends) the question: asking always stays the user's click.
+  const pick = (q: string) => {
+    setQuestion(q)
+    questionRef.current?.focus()
+  }
+  const resetConversation = () => {
+    setHistory([])
+    setLastResponse(null)
+  }
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -266,8 +322,19 @@ export function AnalyzeAnalystView() {
         onSuccess: (response) => {
           setLastResponse(response)
           setAnswerCount((n) => n + 1)
-          // The server caps each turn at 4,000 characters.
-          setHistory((prev) => [...prev, { question: asked, answer: response.answer.slice(0, 4000) }])
+          setQuestion('')
+          // The server caps each turn at 4,000 characters. `context` is a
+          // compact record of what was computed (tools + arguments, never
+          // data values), so a follow-up like "break that down by region"
+          // knows which metric and period "that" was.
+          setHistory((prev) => [
+            ...prev,
+            {
+              question: asked,
+              answer: response.answer.slice(0, 4000),
+              context: analysisContext(response.tool_calls),
+            },
+          ])
         },
       },
     )
@@ -297,8 +364,7 @@ export function AnalyzeAnalystView() {
                   value={datasetId}
                   onChange={(e) => {
                     setDatasetId(e.target.value)
-                    setHistory([])
-                    setLastResponse(null)
+                    resetConversation()
                   }}
                 >
                   <option value="">Select a dataset…</option>
@@ -312,6 +378,7 @@ export function AnalyzeAnalystView() {
               <div className="space-y-1.5">
                 <Label htmlFor="analyze-question">Question</Label>
                 <Input
+                  ref={questionRef}
                   id="analyze-question"
                   value={question}
                   onChange={(e) => setQuestion(e.target.value)}
@@ -324,8 +391,15 @@ export function AnalyzeAnalystView() {
                 disabled={!datasetId || !question.trim() || analyze.isPending}
               >
                 <Sparkles className="h-4 w-4" strokeWidth={1.75} />
-                {analyze.isPending ? 'Analyzing…' : 'Ask'}
+                {analyze.isPending ? 'Analyzing…' : history.length ? 'Ask follow-up' : 'Ask'}
               </Button>
+              {datasetId && history.length === 0 && (
+                <QuestionChips
+                  label="Suggested starting points for this dataset"
+                  questions={briefing.data?.suggested_questions ?? []}
+                  onPick={pick}
+                />
+              )}
               <p className="text-xs text-[var(--color-fg-subtle)]">
                 Your question, column names, and small calculated results are sent to our AI
                 provider (Groq). AI answers can be wrong; check the evidence below.{' '}
@@ -362,14 +436,52 @@ export function AnalyzeAnalystView() {
         </Card>
       )}
 
-      {lastResponse && (
+      {history.length > 1 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Answer</CardTitle>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Earlier in this conversation</CardTitle>
+            <Button size="sm" variant="ghost" onClick={resetConversation}>
+              <MessageSquarePlus className="h-4 w-4" strokeWidth={1.75} />
+              New conversation
+            </Button>
           </CardHeader>
           <CardContent>
+            <ol className="space-y-3">
+              {history.slice(0, -1).map((turn, i) => (
+                <li key={i} className="space-y-0.5">
+                  <p className="text-sm font-medium text-[var(--color-fg)]">{turn.question}</p>
+                  <p className="line-clamp-2 text-sm text-[var(--color-fg-muted)]">{turn.answer}</p>
+                </li>
+              ))}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
+      {lastResponse && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <CardTitle>Answer</CardTitle>
+            {history.length === 1 && (
+              <Button size="sm" variant="ghost" onClick={resetConversation}>
+                <MessageSquarePlus className="h-4 w-4" strokeWidth={1.75} />
+                New conversation
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-xs text-[var(--color-fg-subtle)]">{lastResponse.question}</p>
             <EvidencePanel response={lastResponse} />
             <AnswerActions key={answerCount} datasetId={datasetId} response={lastResponse} />
+            {lastResponse.status === 'ok' && (
+              <div className="mt-4">
+                <QuestionChips
+                  label="Suggested next questions"
+                  questions={lastResponse.suggested_questions ?? []}
+                  onPick={pick}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

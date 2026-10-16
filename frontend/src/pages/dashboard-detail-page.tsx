@@ -2,7 +2,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ChartCard } from '@/components/dashboards/chart-card'
-import { useDashboard, useDeleteChart, useMoveChart } from '@/features/dashboards/api'
+import { useDashboard, useDeleteChart, useMoveChart, useRenameChart } from '@/features/dashboards/api'
 import { LayoutDashboard, Sparkles } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 
@@ -11,6 +11,7 @@ export function DashboardDetailPage() {
   const { data: dashboard, isLoading } = useDashboard(dashboardId ?? '')
   const deleteChart = useDeleteChart(dashboardId ?? '')
   const moveChart = useMoveChart(dashboardId ?? '')
+  const renameChart = useRenameChart(dashboardId ?? '')
 
   if (isLoading) {
     return (
@@ -69,7 +70,13 @@ export function DashboardDetailPage() {
                 isLast={index === dashboard.charts.length - 1}
                 onMoveUp={() => moveChart.mutate({ chartId: chart.id, direction: 'up' })}
                 onMoveDown={() => moveChart.mutate({ chartId: chart.id, direction: 'down' })}
-                onDelete={() => deleteChart.mutate(chart.id)}
+                onDelete={() => {
+                  // Removing a chart can't be undone (its query isn't kept elsewhere).
+                  if (window.confirm(`Remove “${chart.title}” from this dashboard?`)) {
+                    deleteChart.mutate(chart.id)
+                  }
+                }}
+                onRename={(title) => renameChart.mutate({ chartId: chart.id, title })}
               />
             ))}
           </div>

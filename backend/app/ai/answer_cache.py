@@ -42,8 +42,10 @@ def _normalize(question: str) -> str:
     return re.sub(r"\s+", " ", question.strip().lower())
 
 
-def cache_key(dataset_id: UUID, question: str) -> str:
-    raw = f"{dataset_id}:{_normalize(question)}"
+def cache_key(dataset_id: UUID, question: str, version: int = 1) -> str:
+    # The version is part of the key: after a dataset is refreshed, the
+    # same question must be recomputed, never served from the old data.
+    raw = f"{dataset_id}:v{version}:{_normalize(question)}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 

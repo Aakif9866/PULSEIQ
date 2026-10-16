@@ -118,6 +118,12 @@ class GroundTruth:
             lambda: tools.validate_formula(self.df, target_column, formula, tolerance_pct),
         )
 
+    def explain_change(self, date_column: str, metric_column: str | None, **kwargs) -> dict:
+        key = f"change:{date_column}:{metric_column}:{sorted(kwargs.items())}"
+        return self._cached(
+            key, lambda: tools.explain_change(self.df, date_column, metric_column, **kwargs)
+        )
+
     def top_records(self, column: str, n: int = 10) -> dict:
         return self._cached(f"top:{column}:{n}", lambda: tools.get_top_records(self.df, column, n))
 

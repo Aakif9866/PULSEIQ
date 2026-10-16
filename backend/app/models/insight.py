@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Integer, Text
+from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -32,12 +32,20 @@ class Insight(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
+    # Which dataset version the answer was computed on, so a result is never
+    # silently presented as current after the dataset is refreshed.
+    dataset_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # User-editable; None means "show the question" (insights before 0012).
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
     # The DatasetQueryRequest that was run to ground the answer, if one was.
     query_request: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # /analyze findings (claim, value, verified, ...) as returned to the user.
     findings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
+    # The computations behind the answer (tool, arguments, result), so a
+    # saved insight can be reopened and reported with its real evidence.
+    tool_calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"Insight(id={self.id}, question={self.question!r})"

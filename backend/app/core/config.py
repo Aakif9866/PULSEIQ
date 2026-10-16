@@ -102,6 +102,9 @@ class Settings(BaseSettings):
 
     MAX_UPLOAD_SIZE_MB: int = 50
     MAX_DATASETS_PER_USER: int = 5
+    # Older versions of a dataset keep their history row, but only this
+    # many files (including the current one) stay in storage.
+    MAX_DATASET_VERSIONS_KEPT: int = 5
     ALLOWED_UPLOAD_EXTENSIONS: list[str] = [".csv", ".xlsx", ".xls"]
 
     # Reserved for a future scheduled cleanup job (needs the background

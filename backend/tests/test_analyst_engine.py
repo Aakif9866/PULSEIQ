@@ -37,9 +37,11 @@ class _ScriptedProvider(AIProvider):
     def __init__(self, responses: list[ProviderMessage | Exception]) -> None:
         self._responses = list(responses)
         self.calls: list[dict[str, Any]] = []
+        self.received_messages: list[list[dict[str, Any]]] = []
 
     def chat(self, *, messages, tools=None, json_mode=False, temperature=0.1) -> ProviderMessage:
         self.calls.append({"tools": tools is not None, "json_mode": json_mode})
+        self.received_messages.append(list(messages))
         if not self._responses:
             raise AssertionError("ScriptedProvider ran out of scripted responses")
         next_response = self._responses.pop(0)
@@ -264,3 +266,39 @@ def test_run_analysis_stops_after_max_tool_iterations(monkeypatch):
     assert provider.calls[-1] == {"tools": False, "json_mode": True}
     assert response.status == "ok"
     assert "analysis_hit_max_tool_iterations" in warnings
+
+
+def test_degraded_answer_names_the_actual_failure():
+    """A rate limit or a misconfigured key gets a message that says so,
+    instead of the generic "empty or invalid response"."""
+    rate_limited = run_analysis(
+        _df(), _ScriptedProvider([AiResponseError("x", reason="rate_limited")]), "How many rows?"
+    )
+    assert rate_limited.failure_reason == "rate_limited"
+    assert "rate limit" in rate_limited.answer
+
+    misconfigured = run_analysis(
+        _df(), _ScriptedProvider([AiResponseError("x", reason="auth")]), "How many rows?"
+    )
+    assert misconfigured.failure_reason == "auth"
+    assert "configuration problem" in misconfigured.answer
+    assert "GROQ" not in misconfigured.answer  # never names the secret
+
+
+
+def test_follow_up_turns_carry_what_was_computed_not_just_the_prose():
+    from app.schemas.analysis import ConversationTurn
+
+    provider = _ScriptedProvider([AiResponseError("stop here")])
+    history = [
+        ConversationTurn(
+            question="Revenue by region?",
+            answer="North leads.",
+            context='group_by_aggregate(group_by=["region"], column="revenue")',
+        )
+    ]
+    run_analysis(_df(), provider, "Break that down by channel", history)
+    assistant = [m for m in provider.received_messages[0] if m["role"] == "assistant"][0]
+    assert "North leads." in assistant["content"]
+    expected = 'Computed for this answer: group_by_aggregate(group_by=["region"]'
+    assert expected in assistant["content"]

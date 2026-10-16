@@ -5,9 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.exceptions import ChartNotFoundError, DashboardNotFoundError, DatasetNotFoundError
+from app.core.exceptions import (
+    ChartNotFoundError,
+    DashboardNotFoundError,
+    DatasetNotFoundError,
+    InsightNotFoundError,
+)
 from app.models.user import User
 from app.schemas.dashboard import (
+    ChartUpdate,
     DashboardChartCreate,
     DashboardChartRead,
     DashboardCreate,
@@ -82,6 +88,30 @@ def add_chart(
     except DatasetNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Dataset not found"
+        ) from exc
+    except InsightNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Insight not found"
+        ) from exc
+
+
+@router.patch("/{dashboard_id}/charts/{chart_id}", status_code=status.HTTP_204_NO_CONTENT)
+def rename_chart(
+    dashboard_id: uuid.UUID,
+    chart_id: uuid.UUID,
+    payload: ChartUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    try:
+        DashboardService(db).rename_chart(dashboard_id, current_user.id, chart_id, payload)
+    except DashboardNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Dashboard not found"
+        ) from exc
+    except ChartNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chart not found"
         ) from exc
 
 

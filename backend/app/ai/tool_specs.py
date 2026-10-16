@@ -169,6 +169,32 @@ TOOL_SPECS: list[dict[str, Any]] = [
         ["group_column", "metric_column"],
     ),
     _spec(
+        "explain_change",
+        "Explain how a metric changed between two periods and which segments "
+        "drove the change (contribution analysis). Use for 'why did X drop/"
+        "grow', 'what drove the change', 'which region/product contributed "
+        "most', or 'compare period A with period B'. Defaults to the latest "
+        "period vs the one before; dimensions are chosen automatically from "
+        "the schema when omitted. Shows where a change happened, not why.",
+        {
+            "date_column": {"type": "string"},
+            "metric_column": {"type": "string", "description": "Omit only if op is 'count'."},
+            "op": {"type": "string", "enum": ["sum", "count", "avg"]},
+            "freq": {"type": "string", "enum": ["day", "week", "month", "quarter", "year"]},
+            "current_period": {
+                "type": "string",
+                "description": "e.g. '2024-03' or '2024'. Defaults to the latest period.",
+            },
+            "previous_period": {
+                "type": "string",
+                "description": "Defaults to the period just before current_period.",
+            },
+            "dimensions": _STRING_ARRAY,
+            "top_n": {"type": "integer"},
+        },
+        ["date_column"],
+    ),
+    _spec(
         "validate_formula",
         "Check whether a column's actual values match an arithmetic formula "
         "over other real columns (e.g. 'units * unit_price * (1 - "
@@ -212,6 +238,7 @@ _DISPATCH: dict[str, Callable[..., dict[str, Any]]] = {
     "calculate_correlation": tools.calculate_correlation,
     "time_series_analysis": tools.time_series_analysis,
     "compare_groups": tools.compare_groups,
+    "explain_change": tools.explain_change,
     "validate_formula": tools.validate_formula,
     "get_top_records": tools.get_top_records,
     "get_bottom_records": tools.get_bottom_records,

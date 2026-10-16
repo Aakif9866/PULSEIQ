@@ -23,7 +23,11 @@ export function useAnalyzeDataset(datasetId: string) {
         question: payload.question,
         conversation_history: payload.conversationHistory ?? [],
       } satisfies AnalyzeRequest),
-    // Every /analyze call (success or a 429) changes today's usage.
-    onSettled: () => queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
+    // Every /analyze call (success or a 429) changes today's usage, and
+    // a completed one is new recent activity.
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: USAGE_KEY })
+      queryClient.invalidateQueries({ queryKey: ['history', 'all'] })
+    },
   })
 }

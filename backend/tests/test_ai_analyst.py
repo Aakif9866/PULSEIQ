@@ -199,7 +199,9 @@ def test_save_insight_from_analyze_answer_without_a_query(client):
     assert saved["query_request"] is None
     assert saved["row_count"] is None
     assert saved["findings"][0]["claim"] == "Total amount"
-    assert saved["findings"][0]["verified"] is True
+    # No computations were saved with it, so the server can't confirm the
+    # number: a client-sent "verified" is never trusted (v3 tightening).
+    assert saved["findings"][0]["verified"] is False
 
     listed = client.get("/api/v1/insights", headers=headers).json()
     assert listed[0]["findings"][0]["value"] == 45

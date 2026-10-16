@@ -113,6 +113,20 @@ class MonitorService:
         monitor = self._get_owned_monitor(monitor_id, owner_id)
         return self._evaluate(monitor)
 
+    def run_for_dataset(self, dataset_id: uuid.UUID, owner_id: uuid.UUID) -> list[MonitorRunResult]:
+        """Re-runs every enabled check on a dataset, e.g. after a new version
+        is uploaded. Anomalies are de-duplicated per (check, period), so
+        periods already reported are never reported again."""
+        results = []
+        for monitor in self._monitors.list_for_owner(owner_id):
+            if monitor.dataset_id != dataset_id or not monitor.is_enabled:
+                continue
+            try:
+                results.append(self._evaluate(monitor))
+            except Exception:  # noqa: BLE001 - one broken check must not block the rest
+                logger.error("monitor_rerun_failed", monitor_id=str(monitor.id), exc_info=True)
+        return results
+
     # ---- scheduler entrypoint (NOT owner-scoped; system-only, see
     # app/workers/anomaly_runner.py — never exposed over HTTP) ----
 

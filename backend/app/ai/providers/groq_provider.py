@@ -28,6 +28,7 @@ import re
 import time
 from typing import Any
 
+import groq
 from opentelemetry.trace import Status, StatusCode
 
 from app.ai.providers.base import AIProvider, ProviderMessage, ToolCall
@@ -70,6 +71,30 @@ def _suggested_retry_delay(exc: Exception) -> float | None:
         seconds = float(match.group(2))
         return minutes * 60 + seconds
     return None
+
+
+# Errors that can never succeed on an identical retry: a wrong key, a
+# model this account can't use, or a request Groq rejects outright.
+# Retrying them only burns time (and quota) before the same failure.
+_NOT_RETRYABLE = {"auth", "model_unavailable", "bad_request"}
+
+
+def failure_reason(exc: Exception) -> str:
+    """A stable code for what went wrong, safe to act on and to show (as
+    a mapped message) to users — never the provider's raw error text."""
+    if isinstance(exc, groq.AuthenticationError | groq.PermissionDeniedError):
+        return "auth"
+    if isinstance(exc, groq.NotFoundError):
+        return "model_unavailable"
+    if isinstance(exc, groq.BadRequestError | groq.UnprocessableEntityError):
+        return "bad_request"
+    if isinstance(exc, groq.RateLimitError):
+        return "rate_limited"
+    if isinstance(exc, groq.APITimeoutError):
+        return "timeout"
+    if isinstance(exc, groq.APIConnectionError):
+        return "unreachable"
+    return "provider_error"
 
 
 def _retry_delay_seconds(exc: Exception, attempt: int) -> float:
@@ -209,6 +234,7 @@ class GroqProvider(AIProvider):
 
         client = get_groq_client()
         last_error: Exception | None = None
+        reason = "invalid_response"
 
         # Built conditionally rather than always passed (even as an
         # explicit None) — the SDK serializes an explicit None as JSON
@@ -236,14 +262,23 @@ class GroqProvider(AIProvider):
                 if salvaged is not None:
                     return salvaged
                 last_error = exc
-                delay = _retry_delay_seconds(exc, attempt) if attempt < _MAX_RETRIES else 0.0
+                reason = failure_reason(exc)
+                retryable = reason not in _NOT_RETRYABLE
+                delay = (
+                    _retry_delay_seconds(exc, attempt)
+                    if retryable and attempt < _MAX_RETRIES
+                    else 0.0
+                )
                 logger.warning(
                     "groq_provider_request_failed",
-                    attempt=attempt, error=str(exc), retry_delay_seconds=round(delay, 2),
+                    attempt=attempt, error=str(exc), reason=reason, retryable=retryable,
+                    retry_delay_seconds=round(delay, 2),
                     # The SDK's "Connection error." hides the real reason
                     # (DNS, TLS, illegal header...); its __cause__ has it.
                     cause=repr(exc.__cause__) if exc.__cause__ else None,
                 )
+                if not retryable:
+                    break
                 if delay:
                     time.sleep(delay)
                 continue
@@ -264,13 +299,14 @@ class GroqProvider(AIProvider):
                 # names explicitly — retry rather than surface a blank answer.
                 logger.warning("groq_provider_empty_response", attempt=attempt)
                 last_error = AiResponseError("The AI provider returned an empty response.")
+                reason = "invalid_response"
                 continue
 
             return ProviderMessage(
                 content=message.content, tool_calls=tool_calls, usage=_extract_usage(response)
             )
 
-        logger.error("groq_provider_exhausted_retries", error=str(last_error))
+        logger.error("groq_provider_exhausted_retries", error=str(last_error), reason=reason)
         raise AiResponseError(
-            "The AI provider did not return a usable response after retrying."
+            "The AI provider did not return a usable response after retrying.", reason=reason
         ) from last_error

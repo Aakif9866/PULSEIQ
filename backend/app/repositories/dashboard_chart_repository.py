@@ -22,6 +22,7 @@ class DashboardChartRepository:
         title: str,
         chart_type: str,
         query_request: dict[str, Any],
+        insight_id: uuid.UUID | None = None,
     ) -> DashboardChart:
         next_position = self._db.execute(
             select(func.coalesce(func.max(DashboardChart.position), -1) + 1).where(
@@ -35,6 +36,7 @@ class DashboardChartRepository:
             title=title,
             chart_type=chart_type,
             query_request=query_request,
+            insight_id=insight_id,
             position=next_position,
         )
         self._db.add(chart)
@@ -74,6 +76,12 @@ class DashboardChartRepository:
                 DashboardChart.position.asc()
             )
         return self._db.execute(stmt.limit(1)).scalar_one_or_none()
+
+    def rename(self, chart: DashboardChart, title: str) -> DashboardChart:
+        chart.title = title
+        self._db.commit()
+        self._db.refresh(chart)
+        return chart
 
     def delete(self, chart: DashboardChart) -> None:
         self._db.delete(chart)

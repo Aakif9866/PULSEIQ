@@ -51,8 +51,8 @@ const TITLES: [RegExp, string][] = [
   [/^\/workspace\/dashboards$/, `Dashboards · ${SITE}`],
   [/^\/workspace\/ai-analyst$/, `AI Analysis · ${SITE}`],
   [/^\/workspace\/insights$/, `Saved Insights · ${SITE}`],
-  [/^\/workspace\/monitors\/.+/, `Monitor · ${SITE}`],
-  [/^\/workspace\/monitors$/, `Monitors · ${SITE}`],
+  [/^\/workspace\/monitors\/.+/, `Anomaly check · ${SITE}`],
+  [/^\/workspace\/monitors$/, `Anomaly checks · ${SITE}`],
   [/^\/workspace\/usage$/, `Usage · ${SITE}`],
   [/^\/workspace\/settings$/, `Settings · ${SITE}`],
 ]

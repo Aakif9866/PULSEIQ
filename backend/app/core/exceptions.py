@@ -64,7 +64,13 @@ class AiNotConfiguredError(DomainError):
 
 class AiResponseError(DomainError):
     """Raised when the AI provider errors out, times out, or returns
-    something we can't turn into a valid query/answer."""
+    something we can't turn into a valid query/answer. `reason` is a
+    stable code (see app.ai.providers.groq_provider.failure_reason) used
+    to tell the user what actually went wrong; never a provider message."""
+
+    def __init__(self, message: str = "", *, reason: str = "invalid_response") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 class AiQuotaExceededError(DomainError):
@@ -116,3 +122,8 @@ class AnomalyNotFoundError(DomainError):
 
 class SavedQueryNotFoundError(DomainError):
     pass
+
+
+class DemoDatasetLockedError(DomainError):
+    """The shared demo account's sample dataset can't be replaced: every
+    visitor uses it, so a new version would change it for everyone."""

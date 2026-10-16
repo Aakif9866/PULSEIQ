@@ -42,6 +42,9 @@ class ToolCallRecord(BaseModel):
 class ConversationTurn(BaseModel):
     question: str = Field(max_length=2000)
     answer: str = Field(max_length=4000)
+    # Which computations the answer ran (tool names + arguments, never
+    # result values): lets a follow-up resolve "that" to a metric/period.
+    context: str | None = Field(default=None, max_length=1000)
 
 
 class AnalyzeRequest(BaseModel):
@@ -56,4 +59,9 @@ class AnalyzeResponse(BaseModel):
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     needs_clarification: str | None = None
     status: Literal["ok", "degraded"] = "ok"
+    # Set only when degraded: rate_limited, timeout, unreachable, auth,
+    # model_unavailable, bad_request, provider_error or invalid_response.
+    failure_reason: str | None = None
     warnings: list[str] = Field(default_factory=list)
+    # Deterministic next questions (app/ai/follow_ups.py), never LLM-written.
+    suggested_questions: list[str] = Field(default_factory=list)

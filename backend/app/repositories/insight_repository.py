@@ -24,6 +24,9 @@ class InsightRepository:
         query_request: dict[str, Any] | None,
         row_count: int | None,
         findings: list[dict[str, Any]] | None,
+        title: str | None = None,
+        tool_calls: list[dict[str, Any]] | None = None,
+        dataset_version: int | None = None,
     ) -> Insight:
         insight = Insight(
             owner_id=owner_id,
@@ -33,25 +36,45 @@ class InsightRepository:
             query_request=query_request,
             row_count=row_count,
             findings=findings,
+            title=title,
+            tool_calls=tool_calls,
+            dataset_version=dataset_version,
         )
         self._db.add(insight)
         self._db.commit()
         self._db.refresh(insight)
         return insight
 
-    def list_for_owner(self, owner_id: uuid.UUID) -> list[tuple[Insight, str]]:
-        """Returns (insight, dataset_filename) pairs, newest first."""
+    def list_for_owner(self, owner_id: uuid.UUID) -> list[tuple[Insight, str, int]]:
+        """Returns (insight, dataset_filename, dataset_version), newest first."""
         stmt = (
-            select(Insight, Dataset.original_filename)
+            select(Insight, Dataset.original_filename, Dataset.version)
             .join(Dataset, Dataset.id == Insight.dataset_id)
             .where(Insight.owner_id == owner_id)
             .order_by(Insight.created_at.desc())
         )
-        return [(row[0], row[1]) for row in self._db.execute(stmt).all()]
+        return [(row[0], row[1], row[2]) for row in self._db.execute(stmt).all()]
 
     def get_owned(self, insight_id: uuid.UUID, owner_id: uuid.UUID) -> Insight | None:
         stmt = select(Insight).where(Insight.id == insight_id, Insight.owner_id == owner_id)
         return self._db.execute(stmt).scalar_one_or_none()
+
+    def get_owned_with_filename(
+        self, insight_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> tuple[Insight, str, int] | None:
+        stmt = (
+            select(Insight, Dataset.original_filename, Dataset.version)
+            .join(Dataset, Dataset.id == Insight.dataset_id)
+            .where(Insight.id == insight_id, Insight.owner_id == owner_id)
+        )
+        row = self._db.execute(stmt).first()
+        return (row[0], row[1], row[2]) if row else None
+
+    def rename(self, insight: Insight, title: str) -> Insight:
+        insight.title = title
+        self._db.commit()
+        self._db.refresh(insight)
+        return insight
 
     def delete(self, insight: Insight) -> None:
         self._db.delete(insight)

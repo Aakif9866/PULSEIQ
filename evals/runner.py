@@ -37,8 +37,10 @@ from app.analytics.sql_engine import execute_sql  # noqa: E402
 from app.analytics.sql_validator import validate_and_prepare  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.core.exceptions import AiResponseError, InvalidQueryError  # noqa: E402
+from app.schemas.analysis import ConversationTurn  # noqa: E402
 
 from eval_questions import QUESTIONS, EvalQuestion  # noqa: E402
+from eval_questions_v3 import V3_QUESTIONS  # noqa: E402
 from ground_truth import ground_truth  # noqa: E402
 from instrumentation import track_usage  # noqa: E402
 
@@ -89,12 +91,30 @@ class _ProviderUnavailable(Exception):
         self.daily_quota_hit = daily_quota_hit
 
 
+def phrase_checks(question: EvalQuestion, text: str) -> tuple[bool, bool]:
+    """(mentions_required, makes_unsupported_claim): deterministic v3
+    checks for behaviour a number can't capture."""
+    lowered = text.lower()
+    mentions = not question.must_mention_any or any(
+        p.lower() in lowered for p in question.must_mention_any
+    )
+    unsupported = any(p.lower() in lowered for p in question.must_not_mention)
+    return mentions, unsupported
+
+
 def _score_analyze(question: EvalQuestion, response) -> dict:
     haystack = response.answer + " " + " ".join(str(f.value) for f in response.findings)
+    claims = haystack + " " + " ".join(f.claim for f in response.findings)
     tools_used = {tc.tool for tc in response.tool_calls}
     tool_correct = bool(tools_used & set(question.expected_tools))
-    value_correct = value_matches(question.expected_value, haystack, question.tolerance_pct)
+    mentions_ok, unsupported_claim = phrase_checks(question, claims)
+    value_ok = question.expected_value is None or value_matches(
+        question.expected_value, haystack, question.tolerance_pct
+    )
+    value_correct = value_ok and mentions_ok and not unsupported_claim
     return {
+        "mentions_ok": mentions_ok,
+        "unsupported_claim": unsupported_claim,
         "tool_correct": tool_correct,
         "tools_used": sorted(tools_used),
         "value_correct": value_correct,
@@ -138,13 +158,26 @@ def run_one(question: EvalQuestion) -> dict:
     df = ground_truth(question.dataset).df
     entry: dict = {"id": question.id, "dataset": question.dataset, "question": question.question,
                     "category": question.category, "expected_value": question.expected_value,
-                    "value_description": question.value_description}
+                    "value_description": question.value_description,
+                    "held_out": question.held_out, "follow_up_of": question.follow_up_of}
 
     # --- /analyze (the hybrid engine — every question goes through this) ---
     start = time.perf_counter()
     try:
         with track_usage() as usage:
-            response = run_analysis(df, GroqProvider(), question.question)
+            history = None
+            if question.follow_up_of:
+                # Asked as a real follow-up, exactly as the app sends it: the
+                # earlier answer plus what it computed (tools + arguments).
+                first = run_analysis(df, GroqProvider(), question.follow_up_of)
+                context = "; ".join(
+                    f"{tc.tool}({', '.join(f'{k}={v!r}' for k, v in tc.arguments.items())})"
+                    for tc in first.tool_calls if "error" not in tc.result
+                )[:1000]
+                history = [ConversationTurn(
+                    question=question.follow_up_of, answer=first.answer[:4000], context=context
+                )]
+            response = run_analysis(df, GroqProvider(), question.question, history)
         if response.status != "ok" and usage.errors:
             # The engine degrades gracefully when the provider fails
             # (BUG-017), so this is a well-formed response — but it measures
@@ -225,6 +258,14 @@ def summarize(results: list[dict]) -> dict:
     def pct(n, d):
         return round(100 * n / d, 1) if d else None
 
+    ok = [r for r in results if "error" not in r.get("analyze", {})]
+    by_category: dict[str, dict] = {}
+    for r in ok:
+        c = by_category.setdefault(r["category"], {"questions": 0, "value_correct": 0})
+        c["questions"] += 1
+        c["value_correct"] += int(bool(r["analyze"].get("value_correct")))
+    held = [r for r in ok if r.get("held_out")]
+
     return {
         "total_questions": len(results),
         "analyze_succeeded": len(analyzed),
@@ -253,6 +294,19 @@ def summarize(results: list[dict]) -> dict:
         "analyze_avg_tokens_on_comparable_subset": _avg(
             [r["analyze"].get("total_tokens", 0) for r in ask_pairs]
         ),
+        # v3: behaviour beyond number matching, and overfitting checks.
+        "unsupported_claims": sum(1 for r in ok if r["analyze"].get("unsupported_claim")),
+        "required_mention_missed": sum(
+            1 for r in ok if r["analyze"].get("mentions_ok") is False
+        ),
+        "held_out_questions": len(held),
+        "held_out_value_accuracy_pct": pct(
+            sum(1 for r in held if r["analyze"].get("value_correct")), len(held)
+        ),
+        "by_category": {
+            k: {**v, "accuracy_pct": pct(v["value_correct"], v["questions"])}
+            for k, v in sorted(by_category.items())
+        },
     }
 
 
@@ -276,6 +330,11 @@ def _write_results(out_path: Path, results: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--suite", choices=["baseline", "v3"], default="baseline",
+        help="baseline: the original 51 questions (default, reproducible); "
+        "v3: the change-analysis and failure-mode questions.",
+    )
     parser.add_argument("--sleep", type=float, default=15.0)
     parser.add_argument("--skip-ask", action="store_true")
     parser.add_argument("--out", type=str, default=None)
@@ -290,7 +349,8 @@ def main() -> None:
         f"run_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}.json"
     )
 
-    questions = QUESTIONS[: args.limit] if args.limit else QUESTIONS
+    suite = QUESTIONS if args.suite == "baseline" else V3_QUESTIONS
+    questions = suite[: args.limit] if args.limit else suite
     if args.skip_ask:
         for q in questions:
             q.comparable_to_ask = False

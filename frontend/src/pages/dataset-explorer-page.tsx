@@ -1,5 +1,7 @@
 import { PageHeader } from '@/components/layout/page-header'
 import { AddToDashboardControl } from '@/components/dashboards/add-to-dashboard-control'
+import { DatasetBriefing } from '@/components/datasets/dataset-briefing'
+import { DatasetVersions, UploadVersionButton } from '@/components/datasets/dataset-versions'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -100,16 +102,19 @@ export function DatasetExplorerPage() {
         title={dataset.original_filename}
         description={
           dataset.status === 'profiled'
-            ? `${dataset.row_count?.toLocaleString()} rows · ${dataset.column_count} columns · ${formatBytes(dataset.size_bytes)}`
+            ? `${dataset.row_count?.toLocaleString()} rows · ${dataset.column_count} columns · ${formatBytes(dataset.size_bytes)}${dataset.version > 1 ? ` · version ${dataset.version}` : ''}`
             : `${formatBytes(dataset.size_bytes)} · ${dataset.status}`
         }
         actions={
-          <Button size="sm" variant="secondary" asChild>
-            <Link to="/workspace/datasets">
-              <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-              Back to datasets
-            </Link>
-          </Button>
+          <div className="flex max-w-xl flex-wrap items-center justify-end gap-2">
+            <UploadVersionButton datasetId={dataset.id} />
+            <Button size="sm" variant="secondary" asChild>
+              <Link to="/workspace/datasets">
+                <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+                Back to datasets
+              </Link>
+            </Button>
+          </div>
         }
       />
 
@@ -132,6 +137,9 @@ export function DatasetExplorerPage() {
 
         {dataset.status === 'profiled' && (
           <>
+            <DatasetBriefing datasetId={dataset.id} />
+            <DatasetVersions datasetId={dataset.id} />
+
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Columns</CardTitle>

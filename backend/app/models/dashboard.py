@@ -44,6 +44,11 @@ class DashboardChart(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    # The saved insight this chart came from, if any; a deleted insight
+    # leaves the chart in place (it re-runs its own query) and unlinks it.
+    insight_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("insights.id", ondelete="SET NULL"), nullable=True
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     chart_type: Mapped[str] = mapped_column(String(16), nullable=False)  # "bar" | "line"
     query_request: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

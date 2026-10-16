@@ -27,6 +27,11 @@ class DashboardChartCreate(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     chart_type: ChartType
     query: DatasetQueryRequest
+    insight_id: UUID | None = None
+
+
+class ChartUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
 
 
 class DashboardChartRead(BaseModel):
@@ -38,6 +43,7 @@ class DashboardChartRead(BaseModel):
     title: str
     chart_type: ChartType
     query_request: DatasetQueryRequest
+    insight_id: UUID | None = None
     position: int
     created_at: datetime
 

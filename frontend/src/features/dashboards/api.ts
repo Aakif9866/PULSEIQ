@@ -47,17 +47,19 @@ interface AddChartPayload {
   title: string
   chartType: ChartType
   query: DatasetQueryRequest
+  insightId?: string
 }
 
 export function useAddChart() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ dashboardId, datasetId, title, chartType, query }: AddChartPayload) =>
+    mutationFn: ({ dashboardId, datasetId, title, chartType, query, insightId }: AddChartPayload) =>
       apiClient.post(`/dashboards/${dashboardId}/charts`, {
         dataset_id: datasetId,
         title,
         chart_type: chartType,
         query,
+        insight_id: insightId,
       }),
     onSuccess: (_data, { dashboardId }) => {
       queryClient.invalidateQueries({ queryKey: dashboardKey(dashboardId) })
@@ -74,6 +76,15 @@ export function useDeleteChart(dashboardId: string) {
       queryClient.invalidateQueries({ queryKey: dashboardKey(dashboardId) })
       queryClient.invalidateQueries({ queryKey: DASHBOARDS_KEY })
     },
+  })
+}
+
+export function useRenameChart(dashboardId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ chartId, title }: { chartId: string; title: string }) =>
+      apiClient.patch(`/dashboards/${dashboardId}/charts/${chartId}`, { title }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: dashboardKey(dashboardId) }),
   })
 }
 
