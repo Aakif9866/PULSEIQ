@@ -1,0 +1,132 @@
+{
+  "summary": {
+    "total_questions": 3,
+    "analyze_succeeded": 3,
+    "analyze_failed": 0,
+    "analyze_value_accuracy_pct": 100.0,
+    "analyze_tool_selection_accuracy_pct": 100.0,
+    "validator_flagged_pct_of_findings": 0.0,
+    "findings_total": 4,
+    "findings_unverified": 0,
+    "avg_latency_ms": 23140.0,
+    "avg_tokens_per_question": 9343.0,
+    "avg_tool_calls_per_question": 3.7,
+    "ask_vs_analyze_comparable_questions": 0,
+    "ask_value_accuracy_pct": null,
+    "analyze_value_accuracy_on_comparable_subset_pct": null,
+    "ask_avg_tokens": null,
+    "analyze_avg_tokens_on_comparable_subset": null,
+    "unsupported_claims": 0,
+    "required_mention_missed": 0,
+    "held_out_questions": 0,
+    "held_out_value_accuracy_pct": null,
+    "by_category": {
+      "change_analysis": {
+        "questions": 1,
+        "value_correct": 1,
+        "accuracy_pct": 100.0
+      },
+      "dates": {
+        "questions": 1,
+        "value_correct": 1,
+        "accuracy_pct": 100.0
+      },
+      "zero_baseline": {
+        "questions": 1,
+        "value_correct": 1,
+        "accuracy_pct": 100.0
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "v3-change-edge-1",
+      "dataset": "edge",
+      "question": "What drove the change in revenue from March to April 2024?",
+      "category": "change_analysis",
+      "expected_value": 280.0,
+      "value_description": "size of the Mar -> Apr change",
+      "held_out": false,
+      "follow_up_of": null,
+      "analyze": {
+        "mentions_ok": true,
+        "unsupported_claim": false,
+        "tool_correct": true,
+        "tools_used": [
+          "explain_change"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Revenue fell sharply from March to April 2024, dropping from 600 to 320 (a decline of 280 or about 46.7%). The biggest negative shift came from the North region, which saw revenue plunge by 325, outweighing the modest 45 gain in the South. At the channel level, both web and store channels contributed large drops (\u2011185 and \u2011155 respectively), while the partner channel added a small increase of 60. These segment\u2011level moves together explain most of the overall decline, though the analysis cannot confirm underlying causes without further context.",
+        "findings_total": 2,
+        "findings_verified": 2,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 3327,
+        "total_tokens": 5317,
+        "call_count": 2,
+        "groq_reported_ms": 2609
+      }
+    },
+    {
+      "id": "v3-zero-baseline",
+      "dataset": "edge",
+      "question": "By what percentage did promo_revenue grow from March to April 2024?",
+      "category": "zero_baseline",
+      "expected_value": 75.0,
+      "value_description": "April promo_revenue (March was zero)",
+      "held_out": false,
+      "follow_up_of": null,
+      "analyze": {
+        "mentions_ok": true,
+        "unsupported_claim": false,
+        "tool_correct": true,
+        "tools_used": [
+          "explain_change"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "Promo revenue increased from 0.0 in March 2024 to 75.0 in April 2024, so a percentage change cannot be computed because the base value is zero; the growth is effectively undefined. The absolute increase was 75.0 units. This reflects a rise across several channels and regions, but the lack of prior promo revenue means a conventional percent growth metric is not applicable.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 2537,
+        "total_tokens": 5005,
+        "call_count": 2,
+        "groq_reported_ms": 1881
+      }
+    },
+    {
+      "id": "v3-date-filter",
+      "dataset": "ecommerce",
+      "question": "What was total revenue in November 2024?",
+      "category": "dates",
+      "expected_value": 457037.2,
+      "value_description": "November 2024 revenue",
+      "held_out": false,
+      "follow_up_of": null,
+      "analyze": {
+        "mentions_ok": true,
+        "unsupported_claim": false,
+        "tool_correct": true,
+        "tools_used": [
+          "filter_rows",
+          "get_dataset_profile",
+          "group_by_aggregate"
+        ],
+        "value_correct": true,
+        "status": "ok",
+        "answer": "The total revenue for November 2024 was 457,037.20 (currency units). This figure is based on 7 orders recorded in that month out of 120 total rows in the dataset.",
+        "findings_total": 1,
+        "findings_verified": 1,
+        "findings_unverified": 0,
+        "warnings": [],
+        "latency_ms": 63557,
+        "total_tokens": 17706,
+        "call_count": 7,
+        "groq_reported_ms": 4403
+      }
+    }
+  ]
+}

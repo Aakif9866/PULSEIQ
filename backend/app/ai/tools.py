@@ -106,17 +106,35 @@ def get_unique_values(df: pl.DataFrame, column: str, limit: int = 20) -> dict[st
 
 
 def group_by_aggregate(
-    df: pl.DataFrame, group_by: list[str], column: str | None, op: str
+    df: pl.DataFrame,
+    group_by: list[str],
+    column: str | None,
+    op: str,
+    filters: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
+    """`filters` restricts the rows first (e.g. one month, one region), so
+    "revenue in November" is the November subtotal, not the grand total."""
     aggregations = [Aggregation(op=op, column=column, alias="value")]  # type: ignore[arg-type]
-    request = DatasetQueryRequest(
-        group_by=group_by, aggregations=aggregations, sort_by="value", sort_desc=True
-    )
+    try:
+        request = DatasetQueryRequest(
+            group_by=group_by,
+            aggregations=aggregations,
+            filters=[QueryFilter.model_validate(f) for f in filters or []],
+            sort_by="value",
+            sort_desc=True,
+        )
+    except ValueError as exc:
+        return {"error": f"Invalid filters: {exc}"}
     try:
         result = run_query(df, request, row_limit=_ROW_LIMIT)
     except (ColumnNotFoundError, InvalidQueryError) as exc:
         return {"error": str(exc)}
-    return {"columns": result.columns, "rows": result.rows, "row_count": result.row_count}
+    out: dict[str, Any] = {
+        "columns": result.columns, "rows": result.rows, "row_count": result.row_count
+    }
+    if filters:
+        out["filters_applied"] = filters
+    return out
 
 
 def filter_rows(
@@ -595,20 +613,22 @@ def explain_change(
         segments.sort(key=lambda s: abs(s["change"] or 0), reverse=True)
         moved = sum(abs(s["change"] or 0) for s in segments)
         top = segments[0] if segments else None
+        # Order dimensions by how concentrated the movement is in their
+        # biggest segment (the one that "explains" the change best). Used
+        # only for ordering: shown to the model it was misread as a share
+        # of the change (found by the v3 eval).
+        concentration = abs(top["change"]) / moved if top and moved else 0.0
         breakdowns.append(
-            {
-                "dimension": dim,
-                "segment_count": len(segments),
-                # How concentrated the movement is in the single biggest
-                # segment: a high value means this dimension "explains"
-                # the change well.
-                "top_segment_share_of_movement_pct": _round(
-                    abs(top["change"]) / moved * 100 if top and moved else None
-                ),
-                "top_contributors": segments[:top_n],
-            }
+            (
+                concentration,
+                {
+                    "dimension": dim,
+                    "segment_count": len(segments),
+                    "top_contributors": segments[:top_n],
+                },
+            )
         )
-    breakdowns.sort(key=lambda b: b["top_segment_share_of_movement_pct"] or 0, reverse=True)
+    breakdowns = [b for _, b in sorted(breakdowns, key=lambda pair: pair[0], reverse=True)]
     if dims and any(
         "small_group" in s.get("flags", []) for b in breakdowns for s in b["top_contributors"]
     ):

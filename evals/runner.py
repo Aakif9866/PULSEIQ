@@ -117,6 +117,12 @@ def _score_analyze(question: EvalQuestion, response) -> dict:
         "unsupported_claim": unsupported_claim,
         "tool_correct": tool_correct,
         "tools_used": sorted(tools_used),
+        # Kept so a wasted or retried call can be diagnosed without re-running.
+        "failed_tool_calls": [
+            {"tool": tc.tool, "arguments": tc.arguments, "error": str(tc.result.get("error"))[:300]}
+            for tc in response.tool_calls
+            if isinstance(tc.result, dict) and tc.result.get("error")
+        ],
         "value_correct": value_correct,
         "status": response.status,
         "answer": response.answer,

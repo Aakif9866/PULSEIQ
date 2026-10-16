@@ -16,6 +16,7 @@ describe('chartOptionsFromToolCalls', () => {
         query: {
           group_by: ['region'],
           aggregations: [{ op: 'sum', column: 'revenue', alias: 'value' }],
+          filters: [],
           sort_by: 'value',
           sort_desc: true,
         },
@@ -44,5 +45,14 @@ describe('chartOptionsFromToolCalls', () => {
     ])
     expect(options.map((o) => o.label)).toEqual(['count of rows by a'])
     expect(chartOptionsFromToolCalls([])).toEqual([])
+  })
+
+  it('keeps the row filters the AI applied, so the chart shows the same subset', () => {
+    const [option] = chartOptionsFromToolCalls([
+      agg({ group_by: [], column: 'revenue', op: 'sum',
+            filters: [{ column: 'order_date', op: 'contains', value: '2024-11' }] }),
+    ])
+    expect(option.query.filters).toEqual([{ column: 'order_date', op: 'contains', value: '2024-11' }])
+    expect(option.label).toBe('sum of revenue (total) where order_date contains 2024-11')
   })
 })

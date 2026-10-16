@@ -1,5 +1,6 @@
 """explain_change: deterministic contribution analysis. Every expected
 number below is worked out by hand from the tiny frames in each test."""
+
 import polars as pl
 
 from app.ai.tool_specs import call_tool
@@ -45,7 +46,8 @@ def test_auto_dimensions_skip_ids_dates_and_metrics():
 
 def test_new_and_dropped_segments_are_flagged():
     channel = next(
-        b for b in explain_change(_sales(), "date", "revenue")["breakdowns"]
+        b
+        for b in explain_change(_sales(), "date", "revenue")["breakdowns"]
         if b["dimension"] == "channel"
     )
     store = next(s for s in channel["top_contributors"] if s["segment"] == "store")
@@ -54,7 +56,9 @@ def test_new_and_dropped_segments_are_flagged():
 
 def test_zero_baseline_reports_undefined_percentage():
     df = _sales().with_columns(
-        pl.when(pl.col("date").str.starts_with("2024-02")).then(0.0).otherwise(pl.col("revenue"))
+        pl.when(pl.col("date").str.starts_with("2024-02"))
+        .then(0.0)
+        .otherwise(pl.col("revenue"))
         .alias("revenue")
     )
     r = explain_change(df, "date", "revenue")
@@ -75,11 +79,16 @@ def test_count_needs_no_metric_column():
 
 
 def test_explicit_periods_and_bad_inputs_fail_clearly():
-    assert explain_change(_sales(), "date", "revenue", current_period="2024-03",
-                          previous_period="2024-02")["change"] == -50.0
+    assert (
+        explain_change(
+            _sales(), "date", "revenue", current_period="2024-03", previous_period="2024-02"
+        )["change"]
+        == -50.0
+    )
     assert "error" in explain_change(_sales(), "date", "revenue", current_period="2023-01")
-    assert "error" in explain_change(_sales(), "date", "revenue", current_period="2024-02",
-                                     previous_period="2024-03")
+    assert "error" in explain_change(
+        _sales(), "date", "revenue", current_period="2024-02", previous_period="2024-03"
+    )
     single = _sales().filter(pl.col("date").str.starts_with("2024-03"))
     assert "at least two" in explain_change(single, "date", "revenue")["error"]
 
@@ -156,3 +165,32 @@ def test_period_labels_match_the_granularity():
     assert period_label("2024-03-01", "month") == "2024-03"
     assert period_label("2024-10-01", "quarter") == "2024-Q4"
     assert period_label("2024-01-01", "year") == "2024"
+
+
+def test_group_by_aggregate_can_total_a_filtered_subset():
+    """Found by the v3 eval: "revenue in November" came back as the grand
+    total because the tool had no way to restrict rows first."""
+    from app.ai.tools import group_by_aggregate
+
+    march = group_by_aggregate(
+        _sales(),
+        [],
+        "revenue",
+        "sum",
+        filters=[{"column": "date", "op": "contains", "value": "2024-03"}],
+    )
+    assert march["rows"] == [[100.0]] and march["filters_applied"][0]["value"] == "2024-03"
+    by_region = group_by_aggregate(
+        _sales(),
+        ["region"],
+        "revenue",
+        "sum",
+        filters=[{"column": "date", "op": "contains", "value": "2024-03"}],
+    )
+    assert by_region["rows"] == [["South", 60.0], ["North", 40.0]]
+    assert "error" in group_by_aggregate(_sales(), [], "revenue", "sum", filters=[{"op": "eq"}])
+
+
+def test_model_only_sees_shares_of_the_change_not_of_gross_movement():
+    region = _region(explain_change(_sales(), "date", "revenue"))
+    assert "top_segment_share_of_movement_pct" not in region

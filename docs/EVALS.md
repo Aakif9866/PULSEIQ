@@ -254,3 +254,35 @@ python ../evals/runner.py --limit 5 --sleep 10         # a quick smoke test inst
 Requires a real `GROQ_API_KEY` in `.env` (`AI_PROVIDER=groq`) — this
 harness makes real, billed/quota-consuming API calls, deliberately (see
 "What this harness does, and doesn't, prove" above).
+
+
+## v3 suite (2026-10-17)
+
+`python evals/runner.py --suite v3` - 15 questions (`evals/eval_questions_v3.py`), 6 held out, over the existing
+datasets plus `evals/datasets/edge.csv`. Results: `evals/results/v3_run.json` (first run) and
+`evals/results/v3_rerun_after_fixes.json` (the three misses, re-run after the tool fixes below).
+
+| Metric | First run |
+|---|---|
+| Value accuracy | 12 / 15 (80.0%) |
+| Held-out value accuracy | 6 / 6 (100%) |
+| Tool selection | 14 / 15 (93.3%) - the unsupported-column question answered from the schema with no tool call, which is acceptable |
+| Prompt injection (planted "999999") | 2 / 2 resisted |
+| Unsupported claims flagged | 1 ("infinite increase" for a zero baseline) |
+| Findings unverified by the validator | 2 / 27 |
+| Avg tokens / question | 6,476 |
+
+The three misses, and what each one changed:
+
+| Question | Miss | Cause | Fix |
+|---|---|---|---|
+| Total revenue in November 2024 | Reported the all-time total (595,777) as November | `group_by_aggregate` could not filter rows, so a period subtotal was impossible | Optional `filters` on `group_by_aggregate` (carried into dashboard charts) |
+| What drove the Mar -> Apr change | Said North was 87% of the change (it is 116%) | A "share of gross movement" field, used only for ordering, was shown to the model and misread | Removed from the model-facing output |
+| % growth from a zero baseline | Said "undefined", then "(an infinite increase)" | Model phrasing | None (prompt not tuned to the test); passed on re-run |
+
+Re-run of those three after the fixes: 3 / 3. The November question took six tool calls (two failed) before
+answering correctly; the runner now records failed calls' arguments and errors so this can be diagnosed.
+These fixes changed tools, not prompts, and none of the three questions is held out.
+
+The 51-question baseline was **not** re-run for v3: it needs ~330K tokens, over Groq's free 200K/day. Run it
+over two days with `--resume` to compare against the 86.3% / 100% recorded above.

@@ -1,4 +1,4 @@
-import type { AggregationOp, DatasetQueryRequest } from '@/types/dataset'
+import type { AggregationOp, DatasetQueryRequest, QueryFilter } from '@/types/dataset'
 
 // Mirrors backend/app/schemas/analysis.py exactly — the hybrid AI
 // Analyst's response shape (POST /datasets/{id}/analyze). Distinct from
@@ -92,14 +92,22 @@ export function chartOptionsFromToolCalls(calls: ToolCallRecord[], question = ''
   const options: (ChartOption & { score: number; order: number })[] = []
   calls.forEach((call, order) => {
     if (call.tool !== 'group_by_aggregate' || toolCallFailed(call)) return
-    const { group_by, column, op } = call.arguments as { group_by?: unknown; column?: unknown; op?: unknown }
+    const { group_by, column, op, filters } = call.arguments as {
+      group_by?: unknown
+      column?: unknown
+      op?: unknown
+      filters?: unknown
+    }
     if (!Array.isArray(group_by) || typeof op !== 'string') return
     const groups = group_by.map(String)
     const col = typeof column === 'string' ? column : undefined
-    const key = JSON.stringify([groups, col, op])
+    // Carried into the chart so "revenue in November" stays November.
+    const rowFilters = Array.isArray(filters) ? (filters as QueryFilter[]) : []
+    const key = JSON.stringify([groups, col, op, rowFilters])
     if (seen.has(key)) return
     seen.add(key)
-    const label = `${op} of ${col ?? 'rows'}${groups.length ? ` by ${groups.join(', ')}` : ' (total)'}`
+    const where = rowFilters.map((f) => `${f.column} ${f.op} ${String(f.value)}`).join(', ')
+    const label = `${op} of ${col ?? 'rows'}${groups.length ? ` by ${groups.join(', ')}` : ' (total)'}${where ? ` where ${where}` : ''}`
     const score =
       (groups.length ? 2 : 0) + (col && asked.includes(col.toLowerCase().replaceAll('_', ' ')) ? 1 : 0)
     options.push({
@@ -109,6 +117,7 @@ export function chartOptionsFromToolCalls(calls: ToolCallRecord[], question = ''
       query: {
         group_by: groups,
         aggregations: [{ op: op as AggregationOp, column: col, alias: 'value' }],
+        filters: rowFilters,
         sort_by: 'value',
         sort_desc: true,
       },

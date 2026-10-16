@@ -97,11 +97,30 @@ TOOL_SPECS: list[dict[str, Any]] = [
     _spec(
         "group_by_aggregate",
         "Aggregate a numeric column, grouped by one or more other columns "
-        "(e.g. total revenue per category).",
+        "(e.g. total revenue per category), optionally over filtered rows only "
+        "(e.g. revenue in one month). group_by may be empty for a single total.",
         {
             "group_by": _STRING_ARRAY,
             "column": {"type": "string", "description": "Omit only if op is 'count'."},
             "op": {"type": "string", "enum": ["sum", "avg", "min", "max", "count"]},
+            "filters": {
+                "type": "array",
+                "description": "Restrict rows before aggregating, e.g. one month: "
+                "[{\"column\": \"order_date\", \"op\": \"contains\", \"value\": \"2024-11\"}]. "
+                "Use this whenever the question limits the rows (a period, a region...).",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "column": {"type": "string"},
+                        "op": {
+                            "type": "string",
+                            "enum": ["eq", "ne", "gt", "gte", "lt", "lte", "contains"],
+                        },
+                        "value": {},
+                    },
+                    "required": ["column", "op", "value"],
+                },
+            },
         },
         ["group_by", "op"],
     ),
