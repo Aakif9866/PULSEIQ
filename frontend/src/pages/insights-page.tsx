@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/layout/page-header'
+import { FindingRow } from '@/components/ai/analyze-analyst-view'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -73,6 +74,13 @@ function InsightCard({
           </Button>
         </div>
         <p className="text-sm text-[var(--color-fg-muted)]">{insight.answer}</p>
+        {insight.findings.length > 0 && (
+          <ul className="-mx-4 border-t border-[var(--color-border)]">
+            {insight.findings.map((finding, i) => (
+              <FindingRow key={i} finding={finding} />
+            ))}
+          </ul>
+        )}
       </CardContent>
     </Card>
   )

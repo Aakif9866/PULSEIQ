@@ -1,3 +1,5 @@
+import type { AggregationOp, DatasetQueryRequest } from '@/types/dataset'
+
 // Mirrors backend/app/schemas/analysis.py exactly — the hybrid AI
 // Analyst's response shape (POST /datasets/{id}/analyze). Distinct from
 // AskResponse (types/insight.ts), which is the older, single-query /ask
@@ -64,4 +66,50 @@ export interface AnalyzeResponse {
 export function toolCallFailed(call: ToolCallRecord): string | null {
   const error = call.result?.error
   return typeof error === 'string' ? error : null
+}
+
+export interface ChartOption {
+  label: string
+  query: DatasetQueryRequest
+}
+
+/** Every chartable result in an answer: its successful group_by_aggregate
+ * calls. That tool runs exactly this DatasetQueryRequest (backend
+ * app/ai/tools.py), so a dashboard chart re-runs the same numbers live. No
+ * other tool maps to one chartable query, so those get no chart rather than
+ * a made-up one. The AI often computes several ("sum of revenue by region"
+ * and "count of orders by region"), so the caller lets the user pick; this
+ * only orders them: breakdowns before grand totals, then columns the
+ * question mentions, then the latest call. Duplicates are dropped. */
+export function chartOptionsFromToolCalls(calls: ToolCallRecord[], question = ''): ChartOption[] {
+  const asked = question.toLowerCase()
+  const seen = new Set<string>()
+  const options: (ChartOption & { score: number; order: number })[] = []
+  calls.forEach((call, order) => {
+    if (call.tool !== 'group_by_aggregate' || toolCallFailed(call)) return
+    const { group_by, column, op } = call.arguments as { group_by?: unknown; column?: unknown; op?: unknown }
+    if (!Array.isArray(group_by) || typeof op !== 'string') return
+    const groups = group_by.map(String)
+    const col = typeof column === 'string' ? column : undefined
+    const key = JSON.stringify([groups, col, op])
+    if (seen.has(key)) return
+    seen.add(key)
+    const label = `${op} of ${col ?? 'rows'}${groups.length ? ` by ${groups.join(', ')}` : ' (total)'}`
+    const score =
+      (groups.length ? 2 : 0) + (col && asked.includes(col.toLowerCase().replaceAll('_', ' ')) ? 1 : 0)
+    options.push({
+      label,
+      score,
+      order,
+      query: {
+        group_by: groups,
+        aggregations: [{ op: op as AggregationOp, column: col, alias: 'value' }],
+        sort_by: 'value',
+        sort_desc: true,
+      },
+    })
+  })
+  return options
+    .sort((a, b) => b.score - a.score || b.order - a.order)
+    .map(({ label, query }) => ({ label, query }))
 }

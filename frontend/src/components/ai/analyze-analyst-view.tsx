@@ -5,12 +5,14 @@ import { ErrorReference } from '@/components/ui/error-reference'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { AddToDashboardControl } from '@/components/dashboards/add-to-dashboard-control'
 import { useAnalyzeDataset } from '@/features/ai/api'
+import { useSaveInsight } from '@/features/insights/api'
 import { useDatasets } from '@/features/datasets/api'
 import { ApiError } from '@/lib/api-client'
 import type { AnalyzeResponse, ConversationTurn, Finding, ToolCallRecord } from '@/types/analysis'
-import { toolCallFailed } from '@/types/analysis'
-import { AlertTriangle, CheckCircle2, Database, HelpCircle, Sparkles, Wrench } from 'lucide-react'
+import { chartOptionsFromToolCalls, toolCallFailed } from '@/types/analysis'
+import { AlertTriangle, Bookmark, Check, CheckCircle2, Database, HelpCircle, Sparkles, Wrench } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -20,7 +22,7 @@ const CONFIDENCE_LABEL: Record<Finding['confidence'], string> = {
   low: 'Low confidence',
 }
 
-function FindingRow({ finding }: { finding: Finding }) {
+export function FindingRow({ finding }: { finding: Finding }) {
   return (
     <li className="flex items-start gap-3 border-b border-[var(--color-border)] px-4 py-3 last:border-0">
       {finding.verified ? (
@@ -166,6 +168,82 @@ function EvidencePanel({ response }: { response: AnalyzeResponse }) {
   )
 }
 
+/** Save / add-to-dashboard for one answer. Keyed by the answer, so a new
+ * question starts with fresh "Save insight" state. */
+function AnswerActions({ datasetId, response }: { datasetId: string; response: AnalyzeResponse }) {
+  const save = useSaveInsight()
+  const chartOptions = chartOptionsFromToolCalls(response.tool_calls, response.question)
+  const [chartIndex, setChartIndex] = useState(0)
+  const chart = chartOptions[chartIndex]
+
+  // A degraded answer is an apology, not an insight worth keeping.
+  if (response.status === 'degraded') return null
+
+  return (
+    <div className="mt-4 flex flex-wrap items-start gap-2 border-t border-[var(--color-border)] pt-4">
+      <Button
+        size="sm"
+        variant="secondary"
+        disabled={save.isPending || save.isSuccess}
+        onClick={() =>
+          save.mutate({
+            datasetId,
+            question: response.question,
+            answer: response.answer,
+            findings: response.findings,
+          })
+        }
+      >
+        {save.isSuccess ? (
+          <Check className="h-4 w-4 text-[var(--color-positive)]" strokeWidth={2} />
+        ) : (
+          <Bookmark className="h-4 w-4" strokeWidth={1.75} />
+        )}
+        {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : 'Save insight'}
+      </Button>
+      {save.isSuccess && (
+        <Link
+          to="/workspace/insights"
+          className="self-center text-xs font-medium text-[var(--color-accent)] hover:underline"
+        >
+          View saved insights
+        </Link>
+      )}
+      {chart && (
+        <div className="flex flex-wrap items-start gap-2">
+          {chartOptions.length > 1 && (
+            <Select
+              aria-label="Result to chart"
+              className="h-8 w-auto text-xs"
+              value={chartIndex}
+              onChange={(e) => setChartIndex(Number(e.target.value))}
+            >
+              {chartOptions.map((option, i) => (
+                <option key={option.label} value={i}>
+                  Chart: {option.label}
+                </option>
+              ))}
+            </Select>
+          )}
+          <AddToDashboardControl
+            key={chartIndex}
+            datasetId={datasetId}
+            query={chart.query}
+            defaultTitle={response.question.slice(0, 255)}
+            suggestedChartType={chart.query.group_by?.length ? 'bar' : 'kpi'}
+          />
+        </div>
+      )}
+      {save.isError && (
+        <p className="basis-full text-xs text-[var(--color-negative)]">
+          {save.error instanceof ApiError ? save.error.message : "Couldn't save this insight."}
+          <ErrorReference error={save.error} />
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function AnalyzeAnalystView() {
   const { data: datasets } = useDatasets()
   const readyDatasets = datasets?.filter((d) => d.status === 'profiled') ?? []
@@ -174,6 +252,7 @@ export function AnalyzeAnalystView() {
   const [question, setQuestion] = useState('')
   const [history, setHistory] = useState<ConversationTurn[]>([])
   const [lastResponse, setLastResponse] = useState<AnalyzeResponse | null>(null)
+  const [answerCount, setAnswerCount] = useState(0)
 
   const analyze = useAnalyzeDataset(datasetId)
 
@@ -186,6 +265,7 @@ export function AnalyzeAnalystView() {
       {
         onSuccess: (response) => {
           setLastResponse(response)
+          setAnswerCount((n) => n + 1)
           // The server caps each turn at 4,000 characters.
           setHistory((prev) => [...prev, { question: asked, answer: response.answer.slice(0, 4000) }])
         },
@@ -289,18 +369,7 @@ export function AnalyzeAnalystView() {
           </CardHeader>
           <CardContent>
             <EvidencePanel response={lastResponse} />
-            {/* Save insight / Add to dashboard intentionally omitted here:
-                InsightCreate/DashboardChartCreate both require one
-                DatasetQueryRequest + row_count (backend/app/models/insight.py
-                — query_request is NOT NULL), but /analyze can run several
-                tool calls of different shapes, or none. Faking a query
-                from whichever tool happened to run first would be
-                misleading. Tracked as a known gap in docs/PHASES.md Phase
-                8 rather than worked around here. */}
-            <p className="mt-3 text-xs text-[var(--color-fg-muted)]">
-              Saving this as an insight or dashboard chart isn't available yet for open-ended
-              analyses — see docs/PHASES.md Phase 8.
-            </p>
+            <AnswerActions key={answerCount} datasetId={datasetId} response={lastResponse} />
           </CardContent>
         </Card>
       )}

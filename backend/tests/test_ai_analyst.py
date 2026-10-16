@@ -176,3 +176,30 @@ def test_delete_insight(client, monkeypatch):
 
     list_resp = client.get("/api/v1/insights", headers=headers)
     assert all(i["id"] != saved["id"] for i in list_resp.json())
+
+
+def test_save_insight_from_analyze_answer_without_a_query(client):
+    """/analyze answers have findings but no single structured query."""
+    token = _signup_and_token(client, "analyze-saver@pulseiq.dev")
+    headers = {"Authorization": f"Bearer {token}"}
+    dataset_id = _upload_sales(client, headers)
+
+    resp = client.post(
+        "/api/v1/insights",
+        headers=headers,
+        json={
+            "dataset_id": dataset_id,
+            "question": "Total amount?",
+            "answer": "The total amount is 45.",
+            "findings": [{"claim": "Total amount", "value": 45, "verified": True}],
+        },
+    )
+    assert resp.status_code == 201
+    saved = resp.json()
+    assert saved["query_request"] is None
+    assert saved["row_count"] is None
+    assert saved["findings"][0]["claim"] == "Total amount"
+    assert saved["findings"][0]["verified"] is True
+
+    listed = client.get("/api/v1/insights", headers=headers).json()
+    assert listed[0]["findings"][0]["value"] == 45

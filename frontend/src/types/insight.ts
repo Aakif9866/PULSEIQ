@@ -1,3 +1,4 @@
+import type { Finding } from '@/types/analysis'
 import type { ChartType } from '@/types/dashboard'
 import type { DatasetQueryRequest, DatasetQueryResult } from '@/types/dataset'
 
@@ -17,7 +18,9 @@ export interface Insight {
   dataset_filename: string
   question: string
   answer: string
-  query_request: DatasetQueryRequest
-  row_count: number
+  // Null for answers saved from AI Analysis (no single structured query).
+  query_request: DatasetQueryRequest | null
+  row_count: number | null
+  findings: Finding[]
   created_at: string
 }

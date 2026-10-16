@@ -1,5 +1,7 @@
 import { apiClient } from '@/lib/api-client'
-import type { AskResponse, Insight } from '@/types/insight'
+import type { Finding } from '@/types/analysis'
+import type { DatasetQueryRequest } from '@/types/dataset'
+import type { Insight } from '@/types/insight'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 const INSIGHTS_KEY = ['insights'] as const
@@ -11,21 +13,27 @@ export function useInsights() {
   })
 }
 
-interface SaveInsightPayload {
+export interface SaveInsightPayload {
   datasetId: string
-  ask: AskResponse
+  question: string
+  answer: string
+  /** Only when the answer came from one structured query (the /ask engine). */
+  query?: DatasetQueryRequest
+  rowCount?: number
+  findings?: Finding[]
 }
 
 export function useSaveInsight() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ datasetId, ask }: SaveInsightPayload) =>
+    mutationFn: ({ datasetId, question, answer, query, rowCount, findings }: SaveInsightPayload) =>
       apiClient.post<Insight>('/insights', {
         dataset_id: datasetId,
-        question: ask.question,
-        answer: ask.answer,
-        query: ask.query,
-        row_count: ask.result.row_count,
+        question,
+        answer,
+        query,
+        row_count: rowCount,
+        findings,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: INSIGHTS_KEY })

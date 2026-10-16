@@ -3,8 +3,10 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import DatasetNotFoundError, InsightNotFoundError
+from app.models.insight import Insight
 from app.repositories.dataset_repository import DatasetRepository
 from app.repositories.insight_repository import InsightRepository
+from app.schemas.analysis import Finding
 from app.schemas.dataset_query import DatasetQueryRequest
 from app.schemas.insight import InsightCreate, InsightRead
 
@@ -26,32 +28,15 @@ class InsightService:
             dataset_id=payload.dataset_id,
             question=payload.question,
             answer=payload.answer,
-            query_request=payload.query.model_dump(),
+            query_request=payload.query.model_dump() if payload.query else None,
             row_count=payload.row_count,
+            findings=[f.model_dump() for f in payload.findings] or None,
         )
-        return InsightRead(
-            id=insight.id,
-            dataset_id=insight.dataset_id,
-            dataset_filename=dataset.original_filename,
-            question=insight.question,
-            answer=insight.answer,
-            query_request=payload.query,
-            row_count=insight.row_count,
-            created_at=insight.created_at,
-        )
+        return _to_read(insight, dataset.original_filename)
 
     def list_for_owner(self, owner_id: uuid.UUID) -> list[InsightRead]:
         return [
-            InsightRead(
-                id=insight.id,
-                dataset_id=insight.dataset_id,
-                dataset_filename=dataset_filename,
-                question=insight.question,
-                answer=insight.answer,
-                query_request=DatasetQueryRequest.model_validate(insight.query_request),
-                row_count=insight.row_count,
-                created_at=insight.created_at,
-            )
+            _to_read(insight, dataset_filename)
             for insight, dataset_filename in self._repo.list_for_owner(owner_id)
         ]
 
@@ -60,3 +45,21 @@ class InsightService:
         if insight is None:
             raise InsightNotFoundError(insight_id)
         self._repo.delete(insight)
+
+
+def _to_read(insight: Insight, dataset_filename: str) -> InsightRead:
+    return InsightRead(
+        id=insight.id,
+        dataset_id=insight.dataset_id,
+        dataset_filename=dataset_filename,
+        question=insight.question,
+        answer=insight.answer,
+        query_request=(
+            DatasetQueryRequest.model_validate(insight.query_request)
+            if insight.query_request is not None
+            else None
+        ),
+        row_count=insight.row_count,
+        findings=[Finding.model_validate(f) for f in insight.findings or []],
+        created_at=insight.created_at,
+    )

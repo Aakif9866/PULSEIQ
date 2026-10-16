@@ -259,4 +259,89 @@ describe('AnalyzeAnalystView', () => {
       conversation_history: [{ question: 'Which category is best?', answer: 'Electronics, by revenue.' }],
     })
   })
+
+  it('saves an answer as an insight with its findings', async () => {
+    const response: AnalyzeResponse = {
+      question: 'Total amount?',
+      answer: 'The total is 45.',
+      status: 'ok',
+      needs_clarification: null,
+      warnings: [],
+      tool_calls: [],
+      findings: [{ claim: 'Total amount', value: 45, unit: null, affected_rows: null, total_rows: null, calculation: null, classification: null, confidence: 'high', evidence: [], verified: true }],
+    }
+    vi.mocked(apiClient.post).mockResolvedValueOnce(response).mockResolvedValueOnce({ id: 'ins-1' })
+    renderWithProviders()
+    const user = await askQuestion('Total amount?')
+    await user.click(await screen.findByRole('button', { name: /save insight/i }))
+
+    expect(apiClient.post).toHaveBeenLastCalledWith('/insights', {
+      dataset_id: 'ds-1',
+      question: 'Total amount?',
+      answer: 'The total is 45.',
+      query: undefined,
+      row_count: undefined,
+      findings: response.findings,
+    })
+    expect(await screen.findByRole('button', { name: /saved/i })).toBeDisabled()
+  })
+
+  it('offers "Add to dashboard" only when a group-by result can be re-run as a chart', async () => {
+    const base: AnalyzeResponse = {
+      question: 'Revenue by region?',
+      answer: 'North leads.',
+      status: 'ok',
+      needs_clarification: null,
+      warnings: [],
+      findings: [],
+      tool_calls: [{ tool: 'get_dataset_profile', arguments: {}, result: {} }],
+    }
+    vi.mocked(apiClient.post).mockResolvedValueOnce(base)
+    renderWithProviders()
+    const user = await askQuestion('Revenue by region?')
+    await screen.findByRole('button', { name: /save insight/i })
+    expect(screen.queryByRole('button', { name: /add to dashboard/i })).not.toBeInTheDocument()
+
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      ...base,
+      tool_calls: [
+        {
+          tool: 'group_by_aggregate',
+          arguments: { group_by: ['region'], column: 'revenue', op: 'sum' },
+          result: { columns: ['region', 'value'], rows: [['North', 10]] },
+        },
+      ],
+    })
+    await user.type(screen.getByRole('textbox'), ' again')
+    await user.click(screen.getByRole('button', { name: /^ask$/i }))
+    expect(await screen.findByRole('button', { name: /add to dashboard/i })).toBeInTheDocument()
+    // One chartable result: nothing to choose between.
+    expect(screen.queryByRole('combobox', { name: /result to chart/i })).not.toBeInTheDocument()
+  })
+
+  it('lets the user pick which result to chart when the AI computed several', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      question: 'Revenue per region?', answer: 'North leads.', status: 'ok',
+      needs_clarification: null, warnings: [], findings: [],
+      tool_calls: [
+        { tool: 'group_by_aggregate', arguments: { group_by: ['region'], column: 'revenue', op: 'sum' }, result: {} },
+        { tool: 'group_by_aggregate', arguments: { group_by: ['region'], column: 'order_id', op: 'count' }, result: {} },
+      ],
+    })
+    renderWithProviders()
+    await askQuestion('Revenue per region?')
+    const picker = await screen.findByRole('combobox', { name: /result to chart/i })
+    expect(picker).toHaveDisplayValue('Chart: sum of revenue by region')
+  })
+
+  it('hides save actions on a degraded answer', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      question: 'q', answer: 'Analysis could not be completed.', status: 'degraded',
+      needs_clarification: null, warnings: [], findings: [], tool_calls: [],
+    })
+    renderWithProviders()
+    await askQuestion('q')
+    await screen.findByText(/analysis could not be completed/i)
+    expect(screen.queryByRole('button', { name: /save insight/i })).not.toBeInTheDocument()
+  })
 })

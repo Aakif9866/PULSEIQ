@@ -21,8 +21,9 @@ class InsightRepository:
         dataset_id: uuid.UUID,
         question: str,
         answer: str,
-        query_request: dict[str, Any],
-        row_count: int,
+        query_request: dict[str, Any] | None,
+        row_count: int | None,
+        findings: list[dict[str, Any]] | None,
     ) -> Insight:
         insight = Insight(
             owner_id=owner_id,
@@ -31,6 +32,7 @@ class InsightRepository:
             answer=answer,
             query_request=query_request,
             row_count=row_count,
+            findings=findings,
         )
         self._db.add(insight)
         self._db.commit()

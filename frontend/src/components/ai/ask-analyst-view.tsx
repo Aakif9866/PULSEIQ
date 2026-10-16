@@ -38,7 +38,13 @@ export function AskAnalystView() {
 
   const handleSave = () => {
     if (!lastAsk) return
-    save.mutate({ datasetId, ask: lastAsk })
+    save.mutate({
+      datasetId,
+      question: lastAsk.question,
+      answer: lastAsk.answer,
+      query: lastAsk.query,
+      rowCount: lastAsk.result.row_count,
+    })
   }
 
   return (

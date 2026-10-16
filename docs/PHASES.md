@@ -265,13 +265,15 @@ alternatives, 3 interview questions to be ready for).
       both survive real HTTP JSON serialization
       (`test_analyze_surfaces_tool_error_and_degraded_status_over_http`),
       since the new UI reads those fields directly off the response.
-      **Known gap, not worked around:** "Save insight"/"Add to dashboard"
-      aren't wired up for `/analyze` answers yet — `InsightCreate`/
-      `DashboardChartCreate` both require one `DatasetQueryRequest` +
-      `row_count`, and `/analyze` can run several tool calls of different
-      shapes (or none); faking a query from an arbitrary tool call would
-      be misleading. Revisit once there's a real shape for "save this
-      multi-tool analysis."
+      **Gap closed (2026-10-17):** "Save insight" and "Add to dashboard"
+      now work for `/analyze` answers, without faking a query. Insights
+      store the answer plus its verified findings; `query_request`/
+      `row_count` became optional (migration `0011`), still filled for
+      `/ask`. Charts are offered only for successful `group_by_aggregate`
+      calls, which run exactly one `DatasetQueryRequest`, so the chart
+      re-runs the same numbers live. When the AI computed several, the
+      user picks which one to chart (`chartOptionsFromToolCalls`).
+      Degraded answers offer neither.
 - [x] **Step 2 — NL-to-SQL safety audit.** Audited live against the real
       validator/engine (`app/analytics/sql_validator.py`,
       `sql_engine.py`), not a code read. **Two real, working bypasses

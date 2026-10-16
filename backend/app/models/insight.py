@@ -12,8 +12,10 @@ from app.models.base import TimestampMixin, UUIDPrimaryKeyMixin
 
 class Insight(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """A user-saved question + AI-generated answer about one of their
-    datasets. The underlying structured query is kept alongside the answer
-    so a saved insight stays reproducible/inspectable, not just a quote."""
+    datasets. When the answer came from one structured query, it's kept
+    alongside so the insight stays reproducible. Answers from the /analyze
+    engine (several tool calls, or none) have no single query; they keep
+    their verified findings instead."""
 
     __tablename__ = "insights"
 
@@ -31,9 +33,11 @@ class Insight(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
-    # The DatasetQueryRequest that was run to ground the answer.
-    query_request: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The DatasetQueryRequest that was run to ground the answer, if one was.
+    query_request: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # /analyze findings (claim, value, verified, ...) as returned to the user.
+    findings: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid only
         return f"Insight(id={self.id}, question={self.question!r})"
