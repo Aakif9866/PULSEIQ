@@ -26,3 +26,6 @@ frontend/.vite/
 
 # Logs
 *.log
+
+# Knowledge graph (local index)
+graphify-out/
